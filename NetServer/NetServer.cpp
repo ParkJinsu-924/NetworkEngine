@@ -94,6 +94,7 @@ void NetServer::PostRecv(SESSION* pSession)
 	int   result = WSARecv(pSession->sessionSocket, recvBuf, bufCount, nullptr, &flags, &pSession->recvOverlapped, nullptr);
 	if (result == SOCKET_ERROR && WSAGetLastError() != WSA_IO_PENDING)
 	{
+		PrintError(WSAGetLastError(), __LINE__);
 		//need to release session or run iocount decrement logic here
 	}
 }
@@ -102,8 +103,6 @@ void NetServer::PostSend(SESSION* pSession)
 {
 	if (pSession == nullptr)
 		return;
-
-	std::lock_guard<std::mutex> lock(pSession->sendLock);
 
 	RingBuffer& sendQ = pSession->sendQ;
 
@@ -130,6 +129,7 @@ void NetServer::PostSend(SESSION* pSession)
 	int result = WSASend(m_listenSocket, sendBuf, bufCount, nullptr, flags, &pSession->sendOverlapped, nullptr);
 	if (result == SOCKET_ERROR && WSAGetLastError() != WSA_IO_PENDING)
 	{
+		PrintError(WSAGetLastError(), __LINE__);
 		//release session
 	}
 }
@@ -178,6 +178,7 @@ void NetServer::PostSend_RND(SESSION * pSession)
 	int result = WSASend(pSession->sessionSocket, sendBuf, wsaBufIdx, nullptr, flags, &pSession->sendOverlapped, nullptr);
 	if (result == SOCKET_ERROR && WSAGetLastError() != WSA_IO_PENDING)
 	{
+		PrintError(WSAGetLastError(), __LINE__);
 		//release session
 	}
 }
@@ -200,7 +201,7 @@ void NetServer::Send(long long sessionUID, char* pPacket, int size)
 
 	pSession->sendMessageQ.push(pMessage);
 
-	//PostSend(pSession);
+	//PostSend_RND(pSession);
 }
 
 void NetServer::WorkerThread()
@@ -221,6 +222,7 @@ void NetServer::WorkerThread()
 
 		if (transferredBytes == 0 || pOverlapped->Internal == ERROR_OPERATION_ABORTED)
 		{
+			PrintError(WSAGetLastError(), __LINE__);
 			//ReleaseSession, need IOCOUNT
 		}
 
@@ -242,14 +244,16 @@ void NetServer::SendThread()
 		for (auto sessionPair : m_unmapActiveSession)
 		{
 			SESSION* pSession = sessionPair.second;
-			if (pSession->sendFlag == true) //전송 후 아직 완료통지가 오지 않음
+			if (pSession == nullptr)
 				continue;
 
 			if (pSession->sendMessageQ.empty())
 				continue;
 
-			PostSend(pSession);
+			PostSend_RND(pSession);
 		}
+
+		//Send Loop 돌고난 이후, ReleasePending 을 돌면서 Release해줄 애들은 Release
 	}
 }
 
@@ -328,17 +332,21 @@ void NetServer::AfterRecvProcess(SESSION* pSession, DWORD transferredBytes)
 
 		if (recvQ.peek((char*)&header, headerSize) == false)
 		{
+			PrintError(WSAGetLastError(), __LINE__);
 			//release session
 		}
 
 		if (header.length >= RINGBUFFER_SIZE - headerSize)
 		{
+			PrintError(WSAGetLastError(), __LINE__);
 			//release session
 		}
 
 		if ((short)(useSize - headerSize) < header.length)
 			break;
 
+		//need to change
+		/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 		char* pBuffer = new char[header.length]; // MemoryPoolTLS::Alloc(header.length)
 		recvQ.move_tail(headerSize);
 		recvQ.peek((char*)pBuffer, header.length);
@@ -347,6 +355,7 @@ void NetServer::AfterRecvProcess(SESSION* pSession, DWORD transferredBytes)
 		OnRecv(pSession->sessionUID, pBuffer);
 
 		delete[] pBuffer;
+		/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	}
 
 	PostRecv(pSession);
@@ -357,8 +366,16 @@ void NetServer::AfterSendProcess(SESSION* pSession)
 	if (pSession == nullptr)
 		return;
 
-	if (pSession->sendQ.size_in_use() > 0)
-		PostSend(pSession);
+	auto& sessionSendPeningMessageQ = pSession->sendPendingMessageQ;
+
+	MESSAGE* pMessage = nullptr;
+	while (sessionSendPeningMessageQ.try_pop(pMessage))
+	{
+		if (pMessage == nullptr)
+			continue;
+
+		m_pMessagePool->Deallocate(pMessage);
+	}
 }
 
 SESSION* NetServer::AllocateSession()
@@ -387,6 +404,11 @@ SESSION* NetServer::GetSession(SESSION_UID sessionUID)
 		return nullptr;
 
 	return it->second;
+}
+
+void NetServer::PrintError(int errorcode, int line)
+{
+	std::cout << "ERROR : Need to release : ErrorCode : " << errorcode << " : LINE : " << line << std::endl;
 }
 
 int main()

@@ -20,8 +20,8 @@
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <VCProjectVersion>15.0</VCProjectVersion>
-    <ProjectGuid>{997C9DE4-CF46-4416-815F-1BCB49F89AE7}</ProjectGuid>
-    <RootNamespace>NetServer</RootNamespace>
+    <ProjectGuid>{1841BDD1-337B-4E68-9390-7A8C0F56358B}</ProjectGuid>
+    <RootNamespace>NetClient</RootNamespace>
     <WindowsTargetPlatformVersion>10.0.17763.0</WindowsTargetPlatformVersion>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
@@ -123,14 +123,6 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClInclude Include="MemoryPool.h" />
-    <ClInclude Include="NetServer.h" />
-    <ClInclude Include="Protocol.h" />
-    <ClInclude Include="RingBuffer.h" />
-  </ItemGroup>
-  <ItemGroup>
-    <ClCompile Include="NetServer.cpp" />
-    <ClCompile Include="RingBuffer.cpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

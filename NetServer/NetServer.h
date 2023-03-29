@@ -49,12 +49,11 @@ public:
 	OVERLAPPED recvOverlapped;
 	OVERLAPPED sendOverlapped;
 	RingBuffer recvQ;
+	RingBuffer sendQ;
 	Concurrency::concurrent_queue<MESSAGE*> sendMessageQ;
 	Concurrency::concurrent_queue<MESSAGE*> sendPendingMessageQ;
 
-	RingBuffer sendQ;
 	bool	   sendFlag;
-	std::mutex sendLock;
 };
 
 class NetServer
@@ -89,6 +88,8 @@ private:
 	bool	 DeallocateSession(SESSION* pSession);
 
 	SESSION* GetSession(SESSION_UID sessionUID);
+
+	void PrintError(int errorcode, int line);
 
 private:
 	SOCKET					 m_listenSocket;
