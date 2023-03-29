@@ -19,8 +19,8 @@ class SESSION
 {
 public:
 	SESSION()
-		: recvQ(RINGBUFFER_SIZE)
-		, sendQ(RINGBUFFER_SIZE)
+	: recvQ(RINGBUFFER_SIZE)
+	, sendQ(RINGBUFFER_SIZE)
 	{
 	}
 
@@ -44,16 +44,15 @@ public:
 		ZeroMemory(&sendOverlapped, sizeof(sendOverlapped));
 	}
 
-	SOCKET	 sessionSocket;
-	long long  sessionUID;
-	OVERLAPPED recvOverlapped;
-	OVERLAPPED sendOverlapped;
-	RingBuffer recvQ;
-	RingBuffer sendQ;
+	SOCKET									sessionSocket;
+	long long								sessionUID;
+	OVERLAPPED								recvOverlapped;
+	OVERLAPPED								sendOverlapped;
+	RingBuffer								recvQ;
+	RingBuffer								sendQ;
 	Concurrency::concurrent_queue<MESSAGE*> sendMessageQ;
 	Concurrency::concurrent_queue<MESSAGE*> sendPendingMessageQ;
-
-	bool	   sendFlag;
+	//bool	   sendFlag;
 };
 
 class NetServer

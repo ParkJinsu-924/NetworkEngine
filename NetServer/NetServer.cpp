@@ -3,8 +3,8 @@
 constexpr int TOTAL_MESSAGE_COUNT = 5000;
 
 NetServer::NetServer()
-	: m_iAtomicCurrentClientCnt(0)
-	, m_llAtomicSessionUID(0)
+: m_iAtomicCurrentClientCnt(0)
+, m_llAtomicSessionUID(0)
 {
 }
 
@@ -45,7 +45,6 @@ bool NetServer::Start(const char* ip, short port, int workerThreadCnt, bool tcpN
 	if (m_pSessionPool == nullptr || m_pMessagePool == nullptr)
 		return false;
 
-
 	m_iMaxClientCnt = maxUserCnt;
 
 	if (listen(m_listenSocket, SOMAXCONN) == SOCKET_ERROR)
@@ -55,16 +54,16 @@ bool NetServer::Start(const char* ip, short port, int workerThreadCnt, bool tcpN
 	{
 		m_vecWorkerThread.push_back(std::thread([this]() {
 			WorkerThread();
-			}));
+		}));
 	}
 
 	m_vecSendThread.push_back(std::thread([this]() {
 		SendThread();
-		}));
+	}));
 
 	m_AcceptThread = std::thread([this]() {
 		AcceptThread();
-		});
+	});
 
 	return true;
 }
@@ -127,7 +126,6 @@ void NetServer::PostSend(SESSION* pSession)
 
 	DWORD flags = 0;
 	pSession->ResetSendOverlapped();
-	InterlockedExchange8((char*)&pSession->sendFlag, true);
 	int result = WSASend(m_listenSocket, sendBuf, bufCount, nullptr, flags, &pSession->sendOverlapped, nullptr);
 	if (result == SOCKET_ERROR && WSAGetLastError() != WSA_IO_PENDING)
 	{
@@ -136,7 +134,7 @@ void NetServer::PostSend(SESSION* pSession)
 	}
 }
 
-void NetServer::PostSend_RND(SESSION * pSession)
+void NetServer::PostSend_RND(SESSION* pSession)
 {
 	if (pSession == nullptr)
 		return;
@@ -146,7 +144,7 @@ void NetServer::PostSend_RND(SESSION * pSession)
 		return;
 
 	constexpr int MAX_HOLD_MESSAGE = 128;
-	auto& sessionSendMessageQ = pSession->sendMessageQ;
+	auto&		  sessionSendMessageQ = pSession->sendMessageQ;
 	if (sessionSendMessageQ.unsafe_size() > MAX_HOLD_MESSAGE)
 	{
 		//Call Release Session
@@ -155,7 +153,7 @@ void NetServer::PostSend_RND(SESSION * pSession)
 
 	WSABUF sendBuf[MAX_HOLD_MESSAGE];
 
-	int wsaBufIdx = 0;
+	int		 wsaBufIdx = 0;
 	MESSAGE* pMessage = nullptr;
 	while (sessionSendMessageQ.try_pop(pMessage))
 	{
@@ -270,12 +268,12 @@ void NetServer::AcceptThread()
 		{
 			switch (WSAGetLastError())
 			{
-			case WSAECONNRESET:
-				continue;
-			case WSAENOBUFS:
-				continue;
-			default:
-				continue;
+				case WSAECONNRESET:
+					continue;
+				case WSAENOBUFS:
+					continue;
+				default:
+					continue;
 			}
 		}
 
