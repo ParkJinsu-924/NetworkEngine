@@ -75,17 +75,17 @@ void NetServer::PostRecv(SESSION* pSession)
 
 	RingBuffer& recvQ = pSession->recvQ;
 
-	int iFreeSize = recvQ.free_space();
-	int iDirectEnqueueSize = recvQ.direct_enqueue_size();
+	int freeSize = recvQ.free_space();
+	int directEnqueueSize = recvQ.direct_enqueue_size();
 
 	int	bufCount = 1;
 	WSABUF recvBuf[2];
 	recvBuf[0].buf = recvQ.head_pointer();
-	recvBuf[0].len = iDirectEnqueueSize;
-	if (iDirectEnqueueSize < iFreeSize)
+	recvBuf[0].len = directEnqueueSize;
+	if (directEnqueueSize < freeSize)
 	{
 		recvBuf[1].buf = recvQ.start_pointer();
-		recvBuf[1].len = iFreeSize - iDirectEnqueueSize;
+		recvBuf[1].len = freeSize - directEnqueueSize;
 		++bufCount;
 	}
 
@@ -105,46 +105,12 @@ void NetServer::PostSend(SESSION* pSession)
 	if (pSession == nullptr)
 		return;
 
-	RingBuffer& sendQ = pSession->sendQ;
-
-	size_t useSize = sendQ.size_in_use();
-	if (useSize == 0)
-		return;
-
-	size_t directDequeueSize = sendQ.direct_dequeue_size();
-
-	int	bufCount = 1;
-	WSABUF sendBuf[2];
-	sendBuf[0].buf = sendQ.tail_pointer();
-	sendBuf[0].len = directDequeueSize;
-	if (useSize > directDequeueSize)
-	{
-		sendBuf[1].buf = sendQ.start_pointer();
-		sendBuf[1].len = useSize - directDequeueSize;
-		++bufCount;
-	}
-
-	DWORD flags = 0;
-	pSession->ResetSendOverlapped();
-	int result = WSASend(m_listenSocket, sendBuf, bufCount, nullptr, flags, &pSession->sendOverlapped, nullptr);
-	if (result == SOCKET_ERROR && WSAGetLastError() != WSA_IO_PENDING)
-	{
-		PrintError(WSAGetLastError(), __LINE__);
-		//release session
-	}
-}
-
-void NetServer::PostSend_RND(SESSION* pSession)
-{
-	if (pSession == nullptr)
-		return;
-
-	auto& sessionSendPendingMessageQ = pSession->sendPendingMessageQ;
+	auto& sessionSendPendingMessageQ = pSession->sendPendingQ;
 	if (!sessionSendPendingMessageQ.empty())
 		return;
 
 	constexpr int MAX_HOLD_MESSAGE = 128;
-	auto&		  sessionSendMessageQ = pSession->sendMessageQ;
+	auto&		  sessionSendMessageQ = pSession->sendQ;
 	if (sessionSendMessageQ.unsafe_size() > MAX_HOLD_MESSAGE)
 	{
 		//Call Release Session
@@ -199,9 +165,7 @@ void NetServer::Send(long long sessionUID, char* pPacket, int size)
 	pMessage->header.length = size;
 	memcpy(pMessage->payload, pPacket, size);
 
-	pSession->sendMessageQ.push(pMessage);
-
-	//PostSend_RND(pSession);
+	pSession->sendQ.push(pMessage);
 }
 
 void NetServer::WorkerThread()
@@ -247,10 +211,10 @@ void NetServer::SendThread()
 			if (pSession == nullptr)
 				continue;
 
-			if (pSession->sendMessageQ.empty())
+			if (pSession->sendQ.empty())
 				continue;
 
-			PostSend_RND(pSession);
+			PostSend(pSession);
 		}
 
 		//Send Loop 돌고난 이후, ReleasePending 을 돌면서 Release해줄 애들은 Release
@@ -366,7 +330,7 @@ void NetServer::AfterSendProcess(SESSION* pSession)
 	if (pSession == nullptr)
 		return;
 
-	auto& sessionSendPeningMessageQ = pSession->sendPendingMessageQ;
+	auto& sessionSendPeningMessageQ = pSession->sendPendingQ;
 
 	MESSAGE* pMessage = nullptr;
 	while (sessionSendPeningMessageQ.try_pop(pMessage))

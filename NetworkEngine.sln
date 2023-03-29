@@ -11,6 +11,7 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "NetPublic", "NetPublic\NetP
 EndProject
 Global
 	GlobalSection(SharedMSBuildProjectFiles) = preSolution
+		NetPublic\NetPublic.vcxitems*{1841bdd1-337b-4e68-9390-7a8c0f56358b}*SharedItemsImports = 4
 		NetPublic\NetPublic.vcxitems*{997c9de4-cf46-4416-815f-1bcb49f89ae7}*SharedItemsImports = 4
 		NetPublic\NetPublic.vcxitems*{cd337ec5-850a-4e93-8bab-b07e8d9e87eb}*SharedItemsImports = 9
 	EndGlobalSection

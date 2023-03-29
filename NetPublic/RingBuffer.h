@@ -3,6 +3,9 @@
 #include <condition_variable>
 #include <cstring>
 #include <mutex>
+
+constexpr int RINGBUFFER_SIZE = 65535;
+
 class RingBuffer
 {
 public:

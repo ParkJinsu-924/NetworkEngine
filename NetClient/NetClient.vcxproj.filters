@@ -5,5 +5,24 @@
       <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
       <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
     </Filter>
+    <Filter Include="NetClient">
+      <UniqueIdentifier>{054f7277-cb8c-4a67-beee-cf6dae6fc194}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="NetClient.h">
+      <Filter>NetClient</Filter>
+    </ClInclude>
+    <ClInclude Include="CC.h">
+      <Filter>NetClient</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="NetClient.cpp">
+      <Filter>NetClient</Filter>
+    </ClCompile>
+    <ClCompile Include="CC.cpp">
+      <Filter>NetClient</Filter>
+    </ClCompile>
   </ItemGroup>
 </Project>

@@ -13,14 +13,11 @@
 #include "RingBuffer.h"
 #include "Protocol.h"
 
-constexpr int RINGBUFFER_SIZE = 65535;
-
 class SESSION
 {
 public:
 	SESSION()
 	: recvQ(RINGBUFFER_SIZE)
-	, sendQ(RINGBUFFER_SIZE)
 	{
 	}
 
@@ -31,7 +28,6 @@ public:
 		ZeroMemory(&recvOverlapped, sizeof(recvOverlapped));
 		ZeroMemory(&sendOverlapped, sizeof(sendOverlapped));
 		recvQ.Reset();
-		sendQ.Reset();
 	}
 
 	void ResetRecvOverlapped()
@@ -49,9 +45,8 @@ public:
 	OVERLAPPED								recvOverlapped;
 	OVERLAPPED								sendOverlapped;
 	RingBuffer								recvQ;
-	RingBuffer								sendQ;
-	Concurrency::concurrent_queue<MESSAGE*> sendMessageQ;
-	Concurrency::concurrent_queue<MESSAGE*> sendPendingMessageQ;
+	Concurrency::concurrent_queue<MESSAGE*> sendQ;
+	Concurrency::concurrent_queue<MESSAGE*> sendPendingQ;
 	//bool	   sendFlag;
 };
 
@@ -66,7 +61,6 @@ public:
 
 	void PostRecv(SESSION* pSession);
 	void PostSend(SESSION* pSession);
-	void PostSend_RND(SESSION* pSession);
 
 	virtual bool OnConnectionRequest(char* pClientIP, short port) = 0;
 	virtual void OnRecv(SESSION_UID sessionUID, const char* pPacket) = 0;
