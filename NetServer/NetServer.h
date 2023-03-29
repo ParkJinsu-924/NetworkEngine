@@ -7,6 +7,7 @@
 #include <thread>
 #include <atomic>
 #include <concurrent_unordered_map.h>
+#include <concurrent_queue.h>
 
 #include "MemoryPool.h"
 #include "RingBuffer.h"
@@ -18,8 +19,8 @@ class SESSION
 {
 public:
 	SESSION()
-	: recvQ(RINGBUFFER_SIZE)
-	, sendQ(RINGBUFFER_SIZE)
+		: recvQ(RINGBUFFER_SIZE)
+		, sendQ(RINGBUFFER_SIZE)
 	{
 	}
 
@@ -48,6 +49,9 @@ public:
 	OVERLAPPED recvOverlapped;
 	OVERLAPPED sendOverlapped;
 	RingBuffer recvQ;
+	Concurrency::concurrent_queue<MESSAGE*> sendMessageQ;
+	Concurrency::concurrent_queue<MESSAGE*> sendPendingMessageQ;
+
 	RingBuffer sendQ;
 	bool	   sendFlag;
 	std::mutex sendLock;
@@ -64,6 +68,7 @@ public:
 
 	void PostRecv(SESSION* pSession);
 	void PostSend(SESSION* pSession);
+	void PostSend_RND(SESSION* pSession);
 
 	virtual bool OnConnectionRequest(char* pClientIP, short port) = 0;
 	virtual void OnRecv(SESSION_UID sessionUID, const char* pPacket) = 0;
@@ -100,4 +105,5 @@ private:
 	Concurrency::concurrent_unordered_map<SESSION_UID, SESSION*> m_ummapReleasePending;
 
 	MemoryPool<SESSION>* m_pSessionPool;
+	MemoryPool<MESSAGE>* m_pMessagePool;
 };

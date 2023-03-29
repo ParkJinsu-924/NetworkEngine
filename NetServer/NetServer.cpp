@@ -1,8 +1,10 @@
 ﻿#include "NetServer.h"
 
+constexpr int TOTAL_MESSAGE_COUNT = 5000;
+
 NetServer::NetServer()
-: m_iAtomicCurrentClientCnt(0)
-, m_llAtomicSessionUID(0)
+	: m_iAtomicCurrentClientCnt(0)
+	, m_llAtomicSessionUID(0)
 {
 }
 
@@ -39,8 +41,10 @@ bool NetServer::Start(const char* ip, short port, int workerThreadCnt, bool tcpN
 
 	//init pool
 	m_pSessionPool = new (std::nothrow) MemoryPool<SESSION>(maxUserCnt);
-	if (m_pSessionPool == nullptr)
+	m_pMessagePool = new (std::nothrow) MemoryPool<MESSAGE>(TOTAL_MESSAGE_COUNT);
+	if (m_pSessionPool == nullptr || m_pMessagePool == nullptr)
 		return false;
+
 
 	m_iMaxClientCnt = maxUserCnt;
 
@@ -51,16 +55,16 @@ bool NetServer::Start(const char* ip, short port, int workerThreadCnt, bool tcpN
 	{
 		m_vecWorkerThread.push_back(std::thread([this]() {
 			WorkerThread();
-		}));
+			}));
 	}
 
 	m_vecSendThread.push_back(std::thread([this]() {
 		SendThread();
-	}));
+		}));
 
 	m_AcceptThread = std::thread([this]() {
 		AcceptThread();
-	});
+		});
 }
 
 void NetServer::PostRecv(SESSION* pSession)
@@ -130,6 +134,54 @@ void NetServer::PostSend(SESSION* pSession)
 	}
 }
 
+void NetServer::PostSend_RND(SESSION * pSession)
+{
+	if (pSession == nullptr)
+		return;
+
+	auto& sessionSendPendingMessageQ = pSession->sendPendingMessageQ;
+	if (!sessionSendPendingMessageQ.empty())
+		return;
+
+	constexpr int MAX_HOLD_MESSAGE = 128;
+	auto& sessionSendMessageQ = pSession->sendMessageQ;
+	if (sessionSendMessageQ.unsafe_size() > MAX_HOLD_MESSAGE)
+	{
+		//Call Release Session
+		return;
+	}
+
+	WSABUF sendBuf[MAX_HOLD_MESSAGE];
+
+	int wsaBufIdx = 0;
+	MESSAGE* pMessage = nullptr;
+	while (sessionSendMessageQ.try_pop(pMessage))
+	{
+		if (pMessage == nullptr)
+		{
+			//Call Release Session
+			return;
+		}
+
+		sendBuf[wsaBufIdx].buf = (char*)&pMessage->header;
+		sendBuf[wsaBufIdx].len = sizeof(pMessage->header) + pMessage->header.length;
+
+		++wsaBufIdx;
+
+		sessionSendPendingMessageQ.push(pMessage);
+	}
+
+	--wsaBufIdx;
+
+	DWORD flags = 0;
+	pSession->ResetSendOverlapped();
+	int result = WSASend(pSession->sessionSocket, sendBuf, wsaBufIdx, nullptr, flags, &pSession->sendOverlapped, nullptr);
+	if (result == SOCKET_ERROR && WSAGetLastError() != WSA_IO_PENDING)
+	{
+		//release session
+	}
+}
+
 void NetServer::Send(long long sessionUID, char* pPacket, int size)
 {
 	if (pPacket == nullptr)
@@ -139,12 +191,16 @@ void NetServer::Send(long long sessionUID, char* pPacket, int size)
 	if (pSession == nullptr)
 		return;
 
-	if (pSession->sendQ.put(pPacket, size))
-	{
-		//Release Session
-	}
+	MESSAGE* pMessage = m_pMessagePool->Allocate();
+	if (pMessage == nullptr)
+		return;
 
-	PostSend(pSession);
+	pMessage->header.length = size;
+	memcpy(pMessage->payload, pPacket, size);
+
+	pSession->sendMessageQ.push(pMessage);
+
+	//PostSend(pSession);
 }
 
 void NetServer::WorkerThread()
@@ -186,10 +242,10 @@ void NetServer::SendThread()
 		for (auto sessionPair : m_unmapActiveSession)
 		{
 			SESSION* pSession = sessionPair.second;
-			if (pSession->sendFlag == true)
+			if (pSession->sendFlag == true) //전송 후 아직 완료통지가 오지 않음
 				continue;
 
-			if (pSession->sendQ.empty())
+			if (pSession->sendMessageQ.empty())
 				continue;
 
 			PostSend(pSession);
@@ -208,12 +264,12 @@ void NetServer::AcceptThread()
 		{
 			switch (WSAGetLastError())
 			{
-				case WSAECONNRESET:
-					continue;
-				case WSAENOBUFS:
-					continue;
-				default:
-					continue;
+			case WSAECONNRESET:
+				continue;
+			case WSAENOBUFS:
+				continue;
+			default:
+				continue;
 			}
 		}
 
