@@ -8,36 +8,15 @@
     <Filter Include="NetServer">
       <UniqueIdentifier>{d9b30891-446d-4763-bb40-729e81903c84}</UniqueIdentifier>
     </Filter>
-    <Filter Include="MemoryPool">
-      <UniqueIdentifier>{4665fb9a-1bee-4e22-8967-a2c7d8316ca2}</UniqueIdentifier>
-    </Filter>
-    <Filter Include="RingBuffer">
-      <UniqueIdentifier>{22b66ed2-e994-45d8-b519-79ec16daa50b}</UniqueIdentifier>
-    </Filter>
-    <Filter Include="Protocol">
-      <UniqueIdentifier>{f0a7a5bc-9206-47be-83e3-253ab02739e0}</UniqueIdentifier>
-    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="NetServer.h">
       <Filter>NetServer</Filter>
     </ClInclude>
-    <ClInclude Include="MemoryPool.h">
-      <Filter>MemoryPool</Filter>
-    </ClInclude>
-    <ClInclude Include="Protocol.h">
-      <Filter>Protocol</Filter>
-    </ClInclude>
-    <ClInclude Include="RingBuffer.h">
-      <Filter>RingBuffer</Filter>
-    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="NetServer.cpp">
       <Filter>NetServer</Filter>
-    </ClCompile>
-    <ClCompile Include="RingBuffer.cpp">
-      <Filter>RingBuffer</Filter>
     </ClCompile>
   </ItemGroup>
 </Project>

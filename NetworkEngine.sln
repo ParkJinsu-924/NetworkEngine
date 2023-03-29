@@ -5,7 +5,15 @@ VisualStudioVersion = 15.0.28307.1831
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "NetServer", "NetServer\NetServer.vcxproj", "{997C9DE4-CF46-4416-815F-1BCB49F89AE7}"
 EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "NetClient", "NetClient\NetClient.vcxproj", "{1841BDD1-337B-4E68-9390-7A8C0F56358B}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "NetPublic", "NetPublic\NetPublic.vcxitems", "{CD337EC5-850A-4E93-8BAB-B07E8D9E87EB}"
+EndProject
 Global
+	GlobalSection(SharedMSBuildProjectFiles) = preSolution
+		NetPublic\NetPublic.vcxitems*{997c9de4-cf46-4416-815f-1bcb49f89ae7}*SharedItemsImports = 4
+		NetPublic\NetPublic.vcxitems*{cd337ec5-850a-4e93-8bab-b07e8d9e87eb}*SharedItemsImports = 9
+	EndGlobalSection
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|x64 = Debug|x64
 		Debug|x86 = Debug|x86
@@ -21,6 +29,14 @@ Global
 		{997C9DE4-CF46-4416-815F-1BCB49F89AE7}.Release|x64.Build.0 = Release|x64
 		{997C9DE4-CF46-4416-815F-1BCB49F89AE7}.Release|x86.ActiveCfg = Release|Win32
 		{997C9DE4-CF46-4416-815F-1BCB49F89AE7}.Release|x86.Build.0 = Release|Win32
+		{1841BDD1-337B-4E68-9390-7A8C0F56358B}.Debug|x64.ActiveCfg = Debug|x64
+		{1841BDD1-337B-4E68-9390-7A8C0F56358B}.Debug|x64.Build.0 = Debug|x64
+		{1841BDD1-337B-4E68-9390-7A8C0F56358B}.Debug|x86.ActiveCfg = Debug|Win32
+		{1841BDD1-337B-4E68-9390-7A8C0F56358B}.Debug|x86.Build.0 = Debug|Win32
+		{1841BDD1-337B-4E68-9390-7A8C0F56358B}.Release|x64.ActiveCfg = Release|x64
+		{1841BDD1-337B-4E68-9390-7A8C0F56358B}.Release|x64.Build.0 = Release|x64
+		{1841BDD1-337B-4E68-9390-7A8C0F56358B}.Release|x86.ActiveCfg = Release|Win32
+		{1841BDD1-337B-4E68-9390-7A8C0F56358B}.Release|x86.Build.0 = Release|Win32
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

@@ -1,0 +1,30 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="MemoryPool">
+      <UniqueIdentifier>{8945d978-15ee-4ac9-b7aa-17e85d513a72}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Protocol">
+      <UniqueIdentifier>{fdba65b4-da1d-409e-beda-0397b9d0b1f1}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="RingBuffer">
+      <UniqueIdentifier>{4bbecf95-60af-4722-b0fb-12c4fbd280c3}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="$(MSBuildThisFileDirectory)MemoryPool.h">
+      <Filter>MemoryPool</Filter>
+    </ClInclude>
+    <ClInclude Include="$(MSBuildThisFileDirectory)Protocol.h">
+      <Filter>Protocol</Filter>
+    </ClInclude>
+    <ClInclude Include="$(MSBuildThisFileDirectory)RingBuffer.h">
+      <Filter>RingBuffer</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="$(MSBuildThisFileDirectory)RingBuffer.cpp">
+      <Filter>RingBuffer</Filter>
+    </ClCompile>
+  </ItemGroup>
+</Project>

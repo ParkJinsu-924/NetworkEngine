@@ -1,5 +1,6 @@
 #pragma once
 #include <vector>
+#include <mutex>
 template <typename T>
 class MemoryPool
 {
@@ -20,7 +21,7 @@ public:
 public:
 	T* Allocate()
 	{
-		std::lock_guard<std::mutex>(m_lock);
+		std::lock_guard<std::mutex> lock(m_lock);
 		T* ptr = nullptr;
 		if (m_vecPool.size() > 0)
 		{
@@ -36,7 +37,7 @@ public:
 
 	void Deallocate(T* p)
 	{
-		std::lock_guard<std::mutex>(m_lock);
+		std::lock_guard<std::mutex> lock(m_lock);
 		m_vecPool.push_back(p);
 	}
 

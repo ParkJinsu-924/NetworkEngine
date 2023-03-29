@@ -65,6 +65,8 @@ bool NetServer::Start(const char* ip, short port, int workerThreadCnt, bool tcpN
 	m_AcceptThread = std::thread([this]() {
 		AcceptThread();
 		});
+
+	return true;
 }
 
 void NetServer::PostRecv(SESSION* pSession)
@@ -383,7 +385,7 @@ SESSION* NetServer::AllocateSession()
 	if (m_pSessionPool == nullptr)
 		return nullptr;
 
-	m_pSessionPool->Allocate();
+	return m_pSessionPool->Allocate();
 }
 
 bool NetServer::DeallocateSession(SESSION* pSession)
