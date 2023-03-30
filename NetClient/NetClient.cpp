@@ -1,5 +1,7 @@
 #include "NetClient.h"
 
+#define PRINT_ERROR() PrintError(WSAGetLastError(), __LINE__);
+
 bool NetClient::Connect(const char* ip, short port, bool tcpNagleOn)
 {
 	if (ip == nullptr)
@@ -39,6 +41,8 @@ bool NetClient::Connect(const char* ip, short port, bool tcpNagleOn)
 		m_vecWorkerThread.push_back(std::thread([this]() { WorkerThread(); }));
 	}
 
+	m_SendThread = std::thread([this]() { SendThread(); });
+
 	SOCKADDR_IN addr;
 	addr.sin_family = AF_INET;
 	InetPtonA(AF_INET, ip, &addr.sin_addr);
@@ -57,7 +61,62 @@ bool NetClient::Connect(const char* ip, short port, bool tcpNagleOn)
 
 bool NetClient::Send(char* pPacket, int size)
 {
-	return false;
+	if (pPacket == nullptr)
+		return false;
+
+	MESSAGE* pMessage = m_pMessagePool->Allocate();
+	if (pMessage == nullptr)
+		return false;
+
+	pMessage->header.length = size;
+	memcpy(&pMessage->payload, pPacket, size);
+
+	m_Session.sendQ.push(pMessage);
+
+	return true;
+}
+
+void NetClient::WorkerThread()
+{
+	while (true)
+	{
+		OVERLAPPED* pOverlapped = nullptr;
+		DWORD		transferredBytes = 0;
+		SESSION*	pSession = nullptr;
+
+		BOOL success = GetQueuedCompletionStatus(m_hIocp, &transferredBytes, (PULONG_PTR)&pSession, &pOverlapped, INFINITE);
+		if (!success || pOverlapped == nullptr)
+		{
+			// disconnected
+			break;
+		}
+
+		//error_operation_aborted for CancelIo
+		if (transferredBytes == 0 || pOverlapped->Internal == ERROR_OPERATION_ABORTED)
+		{
+			// release
+			break;
+		}
+
+		if (&m_Session.recvOverlapped == pOverlapped)
+		{
+			AfterRecvProcess(transferredBytes);
+		}
+		else if (&m_Session.sendOverlapped == pOverlapped)
+		{
+			AfterSendProcess();
+		}
+	}
+}
+
+void NetClient::SendThread()
+{
+	while (true)
+	{
+		Sleep(1);
+
+		PostSend();
+	}
 }
 
 void NetClient::PostRecv()
@@ -88,4 +147,102 @@ void NetClient::PostRecv()
 	{
 		//need to release sesion
 	}
+}
+
+void NetClient::PostSend()
+{
+	if (m_Session.sendPendingQ.empty() || m_Session.sendQ.empty())
+		return;
+
+	constexpr int MAX_HOLD_MESSAGE = 128;
+	WSABUF		  sendBuf[MAX_HOLD_MESSAGE];
+
+	int		 wsaBufIdx = 0;
+	MESSAGE* pMessage = nullptr;
+	while (m_Session.sendQ.try_pop(pMessage))
+	{
+		if (pMessage == nullptr)
+		{
+			//Call Release Session
+			return;
+		}
+
+		sendBuf[wsaBufIdx].buf = (char*)&pMessage->header;
+		sendBuf[wsaBufIdx].len = sizeof(pMessage->header) + pMessage->header.length;
+
+		++wsaBufIdx;
+
+		m_Session.sendPendingQ.push(pMessage);
+	}
+
+	--wsaBufIdx;
+
+	DWORD flags = 0;
+	m_Session.ResetSendOverlapped();
+	int result = WSASend(m_Session.sessionSocket, sendBuf, wsaBufIdx, nullptr, flags, &m_Session.sendOverlapped, nullptr);
+	if (result == SOCKET_ERROR && WSAGetLastError() != WSA_IO_PENDING)
+	{
+		PRINT_ERROR();
+		//release session
+	}
+}
+
+void NetClient::AfterRecvProcess(DWORD transferredBytes)
+{
+	while (true)
+	{
+		HEADER		header;
+		RingBuffer& recvQ = m_Session.recvQ;
+
+		const size_t headerSize = sizeof(header);
+		const size_t useSize = recvQ.size_in_use();
+		if (useSize <= sizeof(header))
+			break;
+
+		if (recvQ.peek((char*)&header, headerSize) == false)
+		{
+			PRINT_ERROR();
+			break;
+		}
+
+		if (header.length >= RINGBUFFER_SIZE - headerSize)
+		{
+			PRINT_ERROR();
+			break;
+		}
+
+		if ((short)(useSize - headerSize) < header.length)
+			break;
+
+		//need to change
+		/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+		char* pBuffer = new char[header.length]; // MemoryPoolTLS::Alloc(header.length)
+		recvQ.move_tail(headerSize);
+		recvQ.peek((char*)pBuffer, header.length);
+		recvQ.move_tail(header.length);
+
+		OnRecv(pBuffer);
+
+		delete[] pBuffer;
+		/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	}
+
+	PostRecv();
+}
+
+void NetClient::AfterSendProcess()
+{
+	MESSAGE* pMessage = nullptr;
+	while (m_Session.sendPendingQ.try_pop(pMessage))
+	{
+		if (pMessage == nullptr)
+			continue;
+
+		m_pMessagePool->Deallocate(pMessage);
+	}
+}
+
+void NetClient::PrintError(int errorcode, int line)
+{
+	std::cout << "ERROR : Need to release : ErrorCode : " << errorcode << " : LINE : " << line << std::endl;
 }

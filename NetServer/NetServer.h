@@ -88,11 +88,11 @@ private:
 	SOCKET					 m_listenSocket;
 	HANDLE					 m_hIocp;
 	std::vector<std::thread> m_vecWorkerThread;
-	std::thread				 m_AcceptThread;
 	std::vector<std::thread> m_vecSendThread;
+	std::thread				 m_AcceptThread;
 	std::atomic<int>		 m_iAtomicCurrentClientCnt;
 	std::atomic<SESSION_UID> m_llAtomicSessionUID;
-	int						 m_iMaxClientCnt;
+	int						 m_MaxClientCnt;
 
 	Concurrency::concurrent_unordered_map<SESSION_UID, SESSION*> m_unmapActiveSession;
 	Concurrency::concurrent_unordered_map<SESSION_UID, SESSION*> m_ummapAcceptPending;

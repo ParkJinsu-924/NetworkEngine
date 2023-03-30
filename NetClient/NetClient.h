@@ -57,13 +57,24 @@ public:
 	bool Send(char* pPacket, int size);
 	bool Disconnect();
 
+	virtual void OnRecv(const char* pPacket) = 0;
+
 private:
 	void WorkerThread();
+	void SendThread();
 	void PostRecv();
+	void PostSend();
+	void AfterRecvProcess(DWORD transferredBytes);
+	void AfterSendProcess();
+
+	void PrintError(int errorcode, int line);
 
 private:
 	SESSION m_Session;
 	HANDLE  m_hIocp;
 
 	std::vector<std::thread> m_vecWorkerThread;
+	std::thread				 m_SendThread;
+
+	MemoryPool<MESSAGE>* m_pMessagePool;
 };

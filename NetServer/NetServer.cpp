@@ -45,7 +45,7 @@ bool NetServer::Start(const char* ip, short port, int workerThreadCnt, bool tcpN
 	if (m_pSessionPool == nullptr || m_pMessagePool == nullptr)
 		return false;
 
-	m_iMaxClientCnt = maxUserCnt;
+	m_MaxClientCnt = maxUserCnt;
 
 	if (listen(m_listenSocket, SOMAXCONN) == SOCKET_ERROR)
 		return false;
@@ -241,7 +241,7 @@ void NetServer::AcceptThread()
 			}
 		}
 
-		if (m_iAtomicCurrentClientCnt >= m_iMaxClientCnt)
+		if (m_iAtomicCurrentClientCnt >= m_MaxClientCnt)
 		{
 			closesocket(acceptSocket);
 			continue;
