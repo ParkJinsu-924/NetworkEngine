@@ -103,15 +103,8 @@ void NetServer::PostSend(SESSION* pSession)
 	if (!sendPendingQ.empty())
 		return;
 
-	constexpr int MAX_HOLD_MESSAGE = 128;
-	auto&		  sendQ = pSession->sendQ;
-	if (sendQ.unsafe_size() > MAX_HOLD_MESSAGE)
-	{
-		//Call Release Session
-		return;
-	}
-
-	WSABUF sendBuf[MAX_HOLD_MESSAGE];
+	auto&  sendQ = pSession->sendQ;
+	WSABUF sendBuf[MAX_WSABUF_SIZE];
 
 	int		 wsaBufIdx = 0;
 	MESSAGE* pMessage = nullptr;
@@ -129,6 +122,9 @@ void NetServer::PostSend(SESSION* pSession)
 		++wsaBufIdx;
 
 		sendPendingQ.push(pMessage);
+
+		if (wsaBufIdx >= MAX_WSABUF_SIZE)
+			break;
 	}
 
 	DWORD flags = 0;

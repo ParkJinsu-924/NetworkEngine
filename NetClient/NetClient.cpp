@@ -157,8 +157,7 @@ void NetClient::PostSend()
 	if (!m_Session.sendPendingQ.empty() || m_Session.sendQ.empty())
 		return;
 
-	constexpr int MAX_HOLD_MESSAGE = 128;
-	WSABUF		  sendBuf[MAX_HOLD_MESSAGE];
+	WSABUF		  sendBuf[MAX_WSABUF_SIZE];
 
 	int		 wsaBufIdx = 0;
 	MESSAGE* pMessage = nullptr;
@@ -176,6 +175,9 @@ void NetClient::PostSend()
 		++wsaBufIdx;
 
 		m_Session.sendPendingQ.push(pMessage);
+
+		if (wsaBufIdx >= MAX_WSABUF_SIZE)
+			break;
 	}
 
 	m_Session.ResetSendOverlapped();

@@ -26,5 +26,6 @@
     <ClCompile Include="$(MSBuildThisFileDirectory)RingBuffer.cpp">
       <Filter>RingBuffer</Filter>
     </ClCompile>
+    <ClCompile Include="$(MSBuildThisFileDirectory)GlobalValue.h" />
   </ItemGroup>
 </Project>
