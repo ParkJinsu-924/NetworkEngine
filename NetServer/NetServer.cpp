@@ -374,7 +374,3 @@ void NetServer::PrintError(int errorcode, int line)
 {
 	std::cout << "ERROR : Need to release : ErrorCode : " << errorcode << " : LINE : " << line << std::endl;
 }
-
-int main()
-{
-}
