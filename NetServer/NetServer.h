@@ -52,6 +52,7 @@ public:
 
 class NetServer
 {
+public: 
 	using SESSION_UID = long long;
 
 public:
@@ -63,7 +64,7 @@ public:
 	void PostSend(SESSION* pSession);
 
 	virtual bool OnConnectionRequest(char* pClientIP, short port) = 0;
-	virtual void OnRecv(SESSION_UID sessionUID, const char* pPacket) = 0;
+	virtual void OnRecv(SESSION_UID sessionUID, const char* pPacket, int size) = 0;
 	virtual void OnClientJoin(SESSION_UID sessionUID) = 0;
 
 	void Send(long long sessionUID, char* pPacket, int size);

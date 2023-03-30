@@ -8,7 +8,7 @@ bool NetClient::Connect(const char* ip, short port, bool tcpNagleOn)
 		return false;
 
 	WSADATA wsa;
-	if (!WSAStartup(MAKEWORD(2, 2), &wsa))
+	if (WSAStartup(MAKEWORD(2, 2), &wsa) != 0)
 		return false;
 
 	const SOCKET clientSocket = socket(AF_INET, SOCK_STREAM, 0);
@@ -121,8 +121,6 @@ void NetClient::SendThread()
 
 void NetClient::PostRecv()
 {
-	WSABUF recvBuf[2];
-
 	RingBuffer& recvQ = m_Session.recvQ;
 
 	int freeSize = recvQ.free_space();
@@ -177,9 +175,10 @@ void NetClient::PostSend()
 
 	--wsaBufIdx;
 
-	DWORD flags = 0;
 	m_Session.ResetSendOverlapped();
-	int result = WSASend(m_Session.sessionSocket, sendBuf, wsaBufIdx, nullptr, flags, &m_Session.sendOverlapped, nullptr);
+
+	DWORD flags = 0;
+	int   result = WSASend(m_Session.sessionSocket, sendBuf, wsaBufIdx, nullptr, flags, &m_Session.sendOverlapped, nullptr);
 	if (result == SOCKET_ERROR && WSAGetLastError() != WSA_IO_PENDING)
 	{
 		PRINT_ERROR();
@@ -217,11 +216,12 @@ void NetClient::AfterRecvProcess(DWORD transferredBytes)
 		//need to change
 		/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 		char* pBuffer = new char[header.length]; // MemoryPoolTLS::Alloc(header.length)
+		ZeroMemory(pBuffer, header.length);
 		recvQ.move_tail(headerSize);
 		recvQ.peek((char*)pBuffer, header.length);
 		recvQ.move_tail(header.length);
 
-		OnRecv(pBuffer);
+		OnRecv(pBuffer, header.length);
 
 		delete[] pBuffer;
 		/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

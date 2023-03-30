@@ -10,11 +10,8 @@ NetServer::NetServer()
 
 bool NetServer::Start(const char* ip, short port, int workerThreadCnt, bool tcpNagleOn, int maxUserCnt)
 {
-	int iReturnValue = 0;
-
 	WSADATA wsaData;
-	iReturnValue = WSAStartup(MAKEWORD(2, 2), &wsaData);
-	if (iReturnValue != 0)
+	if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0)
 		return false;
 
 	m_listenSocket = socket(AF_INET, SOCK_STREAM, NULL);
@@ -26,13 +23,11 @@ bool NetServer::Start(const char* ip, short port, int workerThreadCnt, bool tcpN
 	InetPtonA(AF_INET, ip, &addr.sin_addr);
 	addr.sin_port = htons(port);
 
-	iReturnValue = bind(m_listenSocket, (SOCKADDR*)&addr, sizeof(addr));
-	if (iReturnValue == SOCKET_ERROR)
+	if(bind(m_listenSocket, (SOCKADDR*)&addr, sizeof(addr)) == SOCKET_ERROR)
 		return false;
 
 	bool bNagleOpt = tcpNagleOn;
-	iReturnValue = setsockopt(m_listenSocket, IPPROTO_TCP, TCP_NODELAY, (const char*)&bNagleOpt, sizeof(bNagleOpt));
-	if (iReturnValue == SOCKET_ERROR)
+	if (setsockopt(m_listenSocket, IPPROTO_TCP, TCP_NODELAY, (const char*)&bNagleOpt, sizeof(bNagleOpt)) == SOCKET_ERROR)
 		return false;
 
 	m_hIocp = CreateIoCompletionPort(INVALID_HANDLE_VALUE, NULL, NULL, workerThreadCnt);
@@ -316,7 +311,7 @@ void NetServer::AfterRecvProcess(SESSION* pSession, DWORD transferredBytes)
 		recvQ.peek((char*)pBuffer, header.length);
 		recvQ.move_tail(header.length);
 
-		OnRecv(pSession->sessionUID, pBuffer);
+		OnRecv(pSession->sessionUID, pBuffer, header.length);
 
 		delete[] pBuffer;
 		/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

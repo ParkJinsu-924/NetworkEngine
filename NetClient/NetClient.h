@@ -53,11 +53,12 @@ public:
 class NetClient
 {
 public:
+	NetClient() = default;
 	bool Connect(const char* ip, short port, bool tcpNagleOn);
 	bool Send(char* pPacket, int size);
-	bool Disconnect();
+	//bool Disconnect();
 
-	virtual void OnRecv(const char* pPacket) = 0;
+	virtual void OnRecv(const char* pPacket, int size) = 0;
 
 private:
 	void WorkerThread();
