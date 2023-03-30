@@ -14,6 +14,7 @@ public:
 
 	bool   put(const char* pData, size_t size);
 	bool   peek(char* pBuffer, size_t size);
+	void   move_head(size_t size);
 	bool   move_tail(size_t size);
 	char*  head_pointer();
 	char*  tail_pointer();

@@ -54,6 +54,21 @@ bool RingBuffer::peek(char* pBuffer, size_t size)
 	return true;
 }
 
+void RingBuffer::move_head(size_t size)
+{
+	std::unique_lock<std::mutex> lock(m_mutex);
+
+	if (size > m_size)
+	{
+		return;
+	}
+
+	m_head = (m_head + size) % m_size;
+	m_used += size;
+	
+	return;
+}
+
 bool RingBuffer::move_tail(size_t size)
 {
 	std::unique_lock<std::mutex> lock(m_mutex);

@@ -1,4 +1,5 @@
 #include "NetClient.h"
+#include "GlobalValue.h"
 
 #define PRINT_ERROR() PrintError(WSAGetLastError(), __LINE__);
 
@@ -36,18 +37,21 @@ bool NetClient::Connect(const char* ip, short port, bool tcpNagleOn)
 	if (m_hIocp == NULL)
 		return false;
 
+	//init pool
+	m_pMessagePool = new MemoryPool<MESSAGE>(TOTAL_MESSAGE_COUNT_IN_MEMORY_POOL);
+
+	//create thread
 	for (int i = 0; i < WORKER_THREAD_CNT; ++i)
 	{
 		m_vecWorkerThread.push_back(std::thread([this]() { WorkerThread(); }));
 	}
-
 	m_SendThread = std::thread([this]() { SendThread(); });
 
+	//connect
 	SOCKADDR_IN addr;
 	addr.sin_family = AF_INET;
 	InetPtonA(AF_INET, ip, &addr.sin_addr);
 	addr.sin_port = htons(port);
-
 	if (connect(clientSocket, (SOCKADDR*)&addr, sizeof(addr)) == SOCKET_ERROR)
 		return false;
 
@@ -149,7 +153,8 @@ void NetClient::PostRecv()
 
 void NetClient::PostSend()
 {
-	if (m_Session.sendPendingQ.empty() || m_Session.sendQ.empty())
+	//when sendPendingQ is not empty, send Process is not over
+	if (!m_Session.sendPendingQ.empty() || m_Session.sendQ.empty())
 		return;
 
 	constexpr int MAX_HOLD_MESSAGE = 128;
@@ -173,8 +178,6 @@ void NetClient::PostSend()
 		m_Session.sendPendingQ.push(pMessage);
 	}
 
-	--wsaBufIdx;
-
 	m_Session.ResetSendOverlapped();
 
 	DWORD flags = 0;
@@ -188,10 +191,12 @@ void NetClient::PostSend()
 
 void NetClient::AfterRecvProcess(DWORD transferredBytes)
 {
+	RingBuffer& recvQ = m_Session.recvQ;
+	recvQ.move_head(transferredBytes);
+
 	while (true)
 	{
-		HEADER		header;
-		RingBuffer& recvQ = m_Session.recvQ;
+		HEADER header;
 
 		const size_t headerSize = sizeof(header);
 		const size_t useSize = recvQ.size_in_use();

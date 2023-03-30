@@ -1,6 +1,5 @@
 ﻿#include "NetServer.h"
-
-constexpr int TOTAL_MESSAGE_COUNT = 5000;
+#include "GlobalValue.h"
 
 NetServer::NetServer()
 : m_iAtomicCurrentClientCnt(0)
@@ -23,7 +22,7 @@ bool NetServer::Start(const char* ip, short port, int workerThreadCnt, bool tcpN
 	InetPtonA(AF_INET, ip, &addr.sin_addr);
 	addr.sin_port = htons(port);
 
-	if(bind(m_listenSocket, (SOCKADDR*)&addr, sizeof(addr)) == SOCKET_ERROR)
+	if (bind(m_listenSocket, (SOCKADDR*)&addr, sizeof(addr)) == SOCKET_ERROR)
 		return false;
 
 	bool bNagleOpt = tcpNagleOn;
@@ -36,7 +35,7 @@ bool NetServer::Start(const char* ip, short port, int workerThreadCnt, bool tcpN
 
 	//init pool
 	m_pSessionPool = new (std::nothrow) MemoryPool<SESSION>(maxUserCnt);
-	m_pMessagePool = new (std::nothrow) MemoryPool<MESSAGE>(TOTAL_MESSAGE_COUNT);
+	m_pMessagePool = new (std::nothrow) MemoryPool<MESSAGE>(TOTAL_MESSAGE_COUNT_IN_MEMORY_POOL);
 	if (m_pSessionPool == nullptr || m_pMessagePool == nullptr)
 		return false;
 
@@ -100,13 +99,13 @@ void NetServer::PostSend(SESSION* pSession)
 	if (pSession == nullptr)
 		return;
 
-	auto& sessionSendPendingMessageQ = pSession->sendPendingQ;
-	if (!sessionSendPendingMessageQ.empty())
+	auto& sendPendingQ = pSession->sendPendingQ;
+	if (!sendPendingQ.empty())
 		return;
 
 	constexpr int MAX_HOLD_MESSAGE = 128;
-	auto&		  sessionSendMessageQ = pSession->sendQ;
-	if (sessionSendMessageQ.unsafe_size() > MAX_HOLD_MESSAGE)
+	auto&		  sendQ = pSession->sendQ;
+	if (sendQ.unsafe_size() > MAX_HOLD_MESSAGE)
 	{
 		//Call Release Session
 		return;
@@ -116,7 +115,7 @@ void NetServer::PostSend(SESSION* pSession)
 
 	int		 wsaBufIdx = 0;
 	MESSAGE* pMessage = nullptr;
-	while (sessionSendMessageQ.try_pop(pMessage))
+	while (sendQ.try_pop(pMessage))
 	{
 		if (pMessage == nullptr)
 		{
@@ -129,10 +128,8 @@ void NetServer::PostSend(SESSION* pSession)
 
 		++wsaBufIdx;
 
-		sessionSendPendingMessageQ.push(pMessage);
+		sendPendingQ.push(pMessage);
 	}
-
-	--wsaBufIdx;
 
 	DWORD flags = 0;
 	pSession->ResetSendOverlapped();
@@ -271,6 +268,8 @@ void NetServer::AcceptThread()
 		m_unmapActiveSession.insert(std::make_pair(pSession->sessionUID, pSession));
 
 		OnClientJoin(pSession->sessionUID);
+
+		PostRecv(pSession);
 	}
 }
 
@@ -279,10 +278,12 @@ void NetServer::AfterRecvProcess(SESSION* pSession, DWORD transferredBytes)
 	if (pSession == nullptr)
 		return;
 
+	RingBuffer& recvQ = pSession->recvQ;
+	recvQ.move_head(transferredBytes);
+
 	while (true)
 	{
-		HEADER		header;
-		RingBuffer& recvQ = pSession->recvQ;
+		HEADER header;
 
 		const size_t headerSize = sizeof(header);
 		const size_t useSize = recvQ.size_in_use();
