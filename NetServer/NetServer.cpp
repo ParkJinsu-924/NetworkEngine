@@ -44,20 +44,15 @@ bool NetServer::Start(const char* ip, short port, int workerThreadCnt, bool tcpN
 	if (listen(m_listenSocket, SOMAXCONN) == SOCKET_ERROR)
 		return false;
 
+	//create thread
 	for (int i = 0; i < workerThreadCnt; ++i)
 	{
-		m_vecWorkerThread.push_back(std::thread([this]() {
-			WorkerThread();
-		}));
+		m_vecWorkerThread.push_back(std::thread([this]() { WorkerThread(); }));
 	}
 
-	m_vecSendThread.push_back(std::thread([this]() {
-		SendThread();
-	}));
+	m_vecSendThread.push_back(std::thread([this]() { SendThread(); }));
 
-	m_AcceptThread = std::thread([this]() {
-		AcceptThread();
-	});
+	m_AcceptThread = std::thread([this]() { AcceptThread(); });
 
 	return true;
 }
@@ -360,6 +355,38 @@ SESSION* NetServer::GetSession(SESSION_UID sessionUID)
 		return nullptr;
 
 	return it->second;
+}
+
+void NetServer::ReleaseSession(SESSION* pSession)
+{
+	if (pSession == nullptr)
+		return;
+
+
+
+
+
+	//dealloc message
+	MESSAGE* pMessage = nullptr;
+	while (pSession->sendQ.try_pop(pMessage))
+	{
+		if (pMessage == nullptr)
+			continue;
+
+		m_pMessagePool->Deallocate(pMessage);
+	}
+
+	while (pSession->sendPendingQ.try_pop(pMessage))
+	{
+		if (pMessage == nullptr)
+			continue;
+
+		m_pMessagePool->Deallocate(pMessage);
+	}
+
+	pSession->Reset();
+
+	m_pSessionPool->Deallocate(pSession);
 }
 
 void NetServer::PrintError(int errorcode, int line)

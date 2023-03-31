@@ -45,9 +45,9 @@ public:
 	OVERLAPPED								recvOverlapped;
 	OVERLAPPED								sendOverlapped;
 	RingBuffer								recvQ;
+	std::atomic<int>						ioCount;
 	Concurrency::concurrent_queue<MESSAGE*> sendQ;
 	Concurrency::concurrent_queue<MESSAGE*> sendPendingQ;
-	//bool	   sendFlag;
 };
 
 class NetServer
@@ -82,6 +82,7 @@ private:
 	bool	 DeallocateSession(SESSION* pSession);
 
 	SESSION* GetSession(SESSION_UID sessionUID);
+	void	 ReleaseSession(SESSION* pSession);
 
 	void PrintError(int errorcode, int line);
 
