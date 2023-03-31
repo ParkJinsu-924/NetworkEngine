@@ -42,6 +42,7 @@ public:
 
 	SOCKET									sessionSocket;
 	long long								sessionUID;
+	long									isDisconnect;
 	OVERLAPPED								recvOverlapped;
 	OVERLAPPED								sendOverlapped;
 	RingBuffer								recvQ;
@@ -52,7 +53,7 @@ public:
 
 class NetServer
 {
-public: 
+public:
 	using SESSION_UID = long long;
 
 public:
@@ -83,8 +84,10 @@ private:
 
 	SESSION* GetSession(SESSION_UID sessionUID);
 	void	 ReleaseSession(SESSION* pSession);
+	bool	 PreventRelease(SESSION* pSession);
+	bool	 UnlockPrevent(SESSION* pSession);
 
-	void PrintError(int errorcode, int line);
+	void	 PrintError(int errorcode, int line);
 
 private:
 	SOCKET					 m_listenSocket;

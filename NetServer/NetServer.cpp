@@ -275,16 +275,17 @@ void NetServer::AcceptThread()
 
 		pSession->sessionSocket = acceptSocket;
 		pSession->sessionUID = m_llAtomicSessionUID++;
+		pSession->isDisconnect = RELEASE_FALSE;
 
 		m_unmapActiveSession.insert(std::make_pair(pSession->sessionUID, pSession));
 
-		++pSession->ioCount; // increase iocount, this iocount is for OnClientJoin
+		PreventRelease(pSession);
 
 		OnClientJoin(pSession->sessionUID);
 
 		PostRecv(pSession);
 
-		--pSession->ioCount;
+		UnlockPrevent(pSession);
 	}
 }
 
@@ -407,6 +408,29 @@ void NetServer::ReleaseSession(SESSION* pSession)
 	pSession->Reset();
 
 	m_pSessionPool->Deallocate(pSession);
+}
+
+bool NetServer::PreventRelease(SESSION* pSession)
+{
+	if (pSession == nullptr)
+		return false;
+
+	if (pSession->isDisconnect == RELEASE_TRUE)
+		return false;
+
+	++pSession->ioCount;
+}
+
+bool NetServer::UnlockPrevent(SESSION* pSession)
+{
+	if (pSession == nullptr)
+		return false;
+
+	//기존에 0, 즉 Release상태가 아니였을 경우에만 ReleaseSession을 호출
+	if (--pSession->ioCount == 0 && InterlockedCompareExchange(&pSession->isDisconnect, RELEASE_TRUE, RELEASE_FALSE) == RELEASE_FALSE)
+	{
+		ReleaseSession(pSession);
+	}
 }
 
 void NetServer::PrintError(int errorcode, int line)
