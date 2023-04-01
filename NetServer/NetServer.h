@@ -79,15 +79,15 @@ private:
 	void AfterRecvProcess(SESSION* pSession, DWORD transferredBytes);
 	void AfterSendProcess(SESSION* pSession);
 
-	SESSION* AllocateSession();
-	bool	 DeallocateSession(SESSION* pSession);
+	SESSION*	GetSession(SESSION_UID sessionUID);
+	SESSION_UID MakeSessionUID(int sessionIdx, int sessionId);
+	void		ReleaseSession(SESSION* pSession);
+	bool		PreventRelease(SESSION* pSession);
+	bool		UnlockPrevent(SESSION* pSession);
 
-	SESSION* GetSession(SESSION_UID sessionUID);
-	void	 ReleaseSession(SESSION* pSession);
-	bool	 PreventRelease(SESSION* pSession);
-	bool	 UnlockPrevent(SESSION* pSession);
+	int GetSessionIndexPart(SESSION_UID sessionUID) { return sessionUID >> 32; }
 
-	void	 PrintError(int errorcode, int line);
+	void PrintError(int errorcode, int line);
 
 private:
 	SOCKET					 m_listenSocket;
@@ -96,13 +96,12 @@ private:
 	std::vector<std::thread> m_vecSendThread;
 	std::thread				 m_AcceptThread;
 	std::atomic<int>		 m_iAtomicCurrentClientCnt;
-	std::atomic<SESSION_UID> m_llAtomicSessionUID;
+	std::atomic<int>		 m_iAtomicSessionUID;
 	int						 m_MaxClientCnt;
 
-	Concurrency::concurrent_unordered_map<SESSION_UID, SESSION*> m_unmapActiveSession;
-	Concurrency::concurrent_unordered_map<SESSION_UID, SESSION*> m_ummapAcceptPending;
-	Concurrency::concurrent_unordered_map<SESSION_UID, SESSION*> m_ummapReleasePending;
+	SESSION*		 m_SessionArray = nullptr;
+	std::vector<int> m_vecSessionIndexArray;
 
-	MemoryPool<SESSION>* m_pSessionPool;
+	// MemoryPool<SESSION>* m_pSessionPool;
 	MemoryPool<MESSAGE>* m_pMessagePool;
 };

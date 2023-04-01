@@ -1,9 +1,10 @@
 ﻿#include "NetServer.h"
 #include "GlobalValue.h"
+#include "NetUtil.h"
 
 NetServer::NetServer()
 : m_iAtomicCurrentClientCnt(0)
-, m_llAtomicSessionUID(0)
+, m_iAtomicSessionUID(0)
 {
 }
 
@@ -33,13 +34,19 @@ bool NetServer::Start(const char* ip, short port, int workerThreadCnt, bool tcpN
 	if (m_hIocp == NULL)
 		return false;
 
+	// init session array
+	m_SessionArray = new (std::nothrow) SESSION[maxUserCnt];
 	// init pool
-	m_pSessionPool = new (std::nothrow) MemoryPool<SESSION>(maxUserCnt);
 	m_pMessagePool = new (std::nothrow) MemoryPool<MESSAGE>(TOTAL_MESSAGE_COUNT_IN_MEMORY_POOL);
-	if (m_pSessionPool == nullptr || m_pMessagePool == nullptr)
+	if (m_SessionArray == nullptr || m_pMessagePool == nullptr)
 		return false;
 
 	m_MaxClientCnt = maxUserCnt;
+
+	for (int sessionIndex = 0; sessionIndex < maxUserCnt; ++sessionIndex)
+	{
+		m_vecSessionIndexArray.push_back(sessionIndex);
+	}
 
 	if (listen(m_listenSocket, SOMAXCONN) == SOCKET_ERROR)
 		return false;
@@ -83,17 +90,14 @@ void NetServer::PostRecv(SESSION* pSession)
 
 	pSession->ResetRecvOverlapped();
 
-	++pSession->ioCount;
+	PreventRelease(pSession);
 
 	DWORD flags = 0;
 	int	  result = WSARecv(pSession->sessionSocket, recvBuf, bufCount, nullptr, &flags, &pSession->recvOverlapped, nullptr);
 	if (result == SOCKET_ERROR && WSAGetLastError() != WSA_IO_PENDING)
 	{
-		PrintError(WSAGetLastError(), __LINE__);
-		if (--pSession->ioCount == 0)
-		{
-			ReleaseSession(pSession);
-		}
+		NetUtil::PrintError(WSAGetLastError(), __LINE__);
+		UnlockPrevent(pSession);
 	}
 }
 
@@ -132,17 +136,15 @@ void NetServer::PostSend(SESSION* pSession)
 
 	pSession->ResetSendOverlapped();
 
-	++pSession->ioCount;
+	//++pSession->ioCount;
+	PreventRelease(pSession);
 
 	DWORD flags = 0;
 	int	  result = WSASend(pSession->sessionSocket, sendBuf, wsaBufIdx, nullptr, flags, &pSession->sendOverlapped, nullptr);
 	if (result == SOCKET_ERROR && WSAGetLastError() != WSA_IO_PENDING)
 	{
-		PrintError(WSAGetLastError(), __LINE__);
-		if (--pSession->ioCount == 0)
-		{
-			ReleaseSession(pSession);
-		}
+		NetUtil::PrintError(WSAGetLastError(), __LINE__);
+		UnlockPrevent(pSession);
 	}
 }
 
@@ -153,6 +155,9 @@ void NetServer::Send(long long sessionUID, char* pPacket, int size)
 
 	SESSION* pSession = GetSession(sessionUID);
 	if (pSession == nullptr)
+		return;
+
+	if (pSession->isDisconnect == RELEASE_TRUE)
 		return;
 
 	MESSAGE* pMessage = m_pMessagePool->Allocate();
@@ -183,7 +188,7 @@ void NetServer::WorkerThread()
 
 		if (transferredBytes == 0 || pOverlapped->Internal == ERROR_OPERATION_ABORTED)
 		{
-			PrintError(WSAGetLastError(), __LINE__);
+			NetUtil::PrintError(WSAGetLastError(), __LINE__);
 			goto IOCOUNT_DECREMENT;
 		}
 
@@ -197,10 +202,7 @@ void NetServer::WorkerThread()
 		}
 
 	IOCOUNT_DECREMENT:
-		if (--pSession->ioCount == 0)
-		{
-			ReleaseSession(pSession);
-		}
+		UnlockPrevent(pSession);
 	}
 }
 
@@ -208,10 +210,17 @@ void NetServer::SendThread()
 {
 	while (true)
 	{
-		for (auto sessionPair : m_unmapActiveSession)
+		for (int idx = 0; idx < m_MaxClientCnt; ++idx)
 		{
-			SESSION* pSession = sessionPair.second;
+			SESSION* pSession = &m_SessionArray[idx];
 			if (pSession == nullptr)
+				continue;
+
+			if (pSession->isDisconnect == RELEASE_TRUE)
+			{
+			}
+
+			if (pSession->sessionSocket == 0)
 				continue;
 
 			if (pSession->sendQ.empty())
@@ -219,8 +228,6 @@ void NetServer::SendThread()
 
 			PostSend(pSession);
 		}
-
-		// Send Loop 돌고난 이후, ReleasePending 을 돌면서 Release해줄 애들은 Release
 	}
 }
 
@@ -254,11 +261,13 @@ void NetServer::AcceptThread()
 		InetNtopA(AF_INET, (const void*)&addr.sin_addr.s_addr, clientIP, sizeof(clientIP));
 		if (!OnConnectionRequest(clientIP, addr.sin_port))
 		{
+			--m_iAtomicCurrentClientCnt;
 			closesocket(acceptSocket);
 			continue;
 		}
 
-		SESSION* pSession = AllocateSession();
+		int		 sessionIdx = m_vecSessionIndexArray.back();
+		SESSION* pSession = &m_SessionArray[sessionIdx];
 		if (pSession == nullptr)
 		{
 			closesocket(acceptSocket);
@@ -269,15 +278,18 @@ void NetServer::AcceptThread()
 		{
 			std::cout << "fail to attach socket in iocp, errno : " << WSAGetLastError() << std::endl;
 			closesocket(acceptSocket);
-			DeallocateSession(pSession);
 			continue;
 		}
 
+		++m_iAtomicCurrentClientCnt;
+
+		m_vecSessionIndexArray.pop_back();
+
 		pSession->sessionSocket = acceptSocket;
-		pSession->sessionUID = m_llAtomicSessionUID++;
+		pSession->sessionUID = NetUtil::MakeSessionUID(sessionIdx, ++m_iAtomicSessionUID);
 		pSession->isDisconnect = RELEASE_FALSE;
 
-		m_unmapActiveSession.insert(std::make_pair(pSession->sessionUID, pSession));
+		// m_unmapActiveSession.insert(std::make_pair(pSession->sessionUID, pSession));
 
 		PreventRelease(pSession);
 
@@ -308,13 +320,13 @@ void NetServer::AfterRecvProcess(SESSION* pSession, DWORD transferredBytes)
 
 		if (recvQ.peek((char*)&header, headerSize) == false)
 		{
-			PrintError(WSAGetLastError(), __LINE__);
+			NetUtil::PrintError(WSAGetLastError(), __LINE__);
 			// release session
 		}
 
 		if (header.length >= RINGBUFFER_SIZE - headerSize)
 		{
-			PrintError(WSAGetLastError(), __LINE__);
+			NetUtil::PrintError(WSAGetLastError(), __LINE__);
 			// release session
 		}
 
@@ -354,32 +366,16 @@ void NetServer::AfterSendProcess(SESSION* pSession)
 	}
 }
 
-SESSION* NetServer::AllocateSession()
-{
-	if (m_pSessionPool == nullptr)
-		return nullptr;
-
-	return m_pSessionPool->Allocate();
-}
-
-bool NetServer::DeallocateSession(SESSION* pSession)
-{
-	if (m_pSessionPool == nullptr || pSession == nullptr)
-		return false;
-
-	pSession->Reset();
-	m_pSessionPool->Deallocate(pSession);
-
-	return true;
-}
-
 SESSION* NetServer::GetSession(SESSION_UID sessionUID)
 {
-	auto it = m_unmapActiveSession.find(sessionUID);
-	if (it == m_unmapActiveSession.end())
+	int sessionIdx = GetSessionIndexPart(sessionUID);
+	if (sessionIdx >= m_MaxClientCnt)
 		return nullptr;
 
-	return it->second;
+	if (m_SessionArray[sessionIdx].sessionUID == sessionUID)
+		return &m_SessionArray[sessionIdx];
+
+	return nullptr;
 }
 
 void NetServer::ReleaseSession(SESSION* pSession)
@@ -387,27 +383,8 @@ void NetServer::ReleaseSession(SESSION* pSession)
 	if (pSession == nullptr)
 		return;
 
-	// dealloc message
-	MESSAGE* pMessage = nullptr;
-	while (pSession->sendQ.try_pop(pMessage))
-	{
-		if (pMessage == nullptr)
-			continue;
-
-		m_pMessagePool->Deallocate(pMessage);
-	}
-
-	while (pSession->sendPendingQ.try_pop(pMessage))
-	{
-		if (pMessage == nullptr)
-			continue;
-
-		m_pMessagePool->Deallocate(pMessage);
-	}
 
 	pSession->Reset();
-
-	m_pSessionPool->Deallocate(pSession);
 }
 
 bool NetServer::PreventRelease(SESSION* pSession)
@@ -426,14 +403,16 @@ bool NetServer::UnlockPrevent(SESSION* pSession)
 	if (pSession == nullptr)
 		return false;
 
-	//기존에 0, 즉 Release상태가 아니였을 경우에만 ReleaseSession을 호출
+	// 기존에 0, 즉 Release상태가 아니였을 경우에만 ReleaseSession을 호출
+	// 두 번째 인터락 조건은 다른 곳에서 WSARecv나 WSASend가 호출되었을 때, 중복 Release방지용
 	if (--pSession->ioCount == 0 && InterlockedCompareExchange(&pSession->isDisconnect, RELEASE_TRUE, RELEASE_FALSE) == RELEASE_FALSE)
 	{
 		ReleaseSession(pSession);
 	}
 }
 
-void NetServer::PrintError(int errorcode, int line)
+int main()
 {
-	std::cout << "ERROR : Need to release : ErrorCode : " << errorcode << " : LINE : " << line << std::endl;
+	unsigned long long n = 1;
+	n = n << 32;
 }
