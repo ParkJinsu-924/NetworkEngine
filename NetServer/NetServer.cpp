@@ -410,9 +410,3 @@ bool NetServer::UnlockPrevent(SESSION* pSession)
 		ReleaseSession(pSession);
 	}
 }
-
-int main()
-{
-	unsigned long long n = 1;
-	n = n << 32;
-}
