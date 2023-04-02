@@ -13,6 +13,8 @@
 #include "RingBuffer.h"
 #include "Protocol.h"
 
+#include "GlobalValue.h"
+
 class SESSION
 {
 public:
@@ -25,6 +27,7 @@ public:
 	{
 		sessionUID = 0;
 		sessionSocket = 0;
+		isDisconnect = RELEASE_FALSE;
 		ZeroMemory(&recvOverlapped, sizeof(recvOverlapped));
 		ZeroMemory(&sendOverlapped, sizeof(sendOverlapped));
 		recvQ.Reset();
@@ -43,6 +46,7 @@ public:
 	SOCKET									sessionSocket;
 	long long								sessionUID;
 	long									isDisconnect;
+	int										sessionIndex;
 	OVERLAPPED								recvOverlapped;
 	OVERLAPPED								sendOverlapped;
 	RingBuffer								recvQ;
@@ -60,17 +64,17 @@ public:
 	NetServer();
 
 	bool Start(const char* ip, short port, int workerThreadCnt, bool tcpNagleOn, int maxUserCnt);
+	bool Send(long long sessionUID, char* pPacket, int size);
 
-	void PostRecv(SESSION* pSession);
-	void PostSend(SESSION* pSession);
-
+protected:
 	virtual bool OnConnectionRequest(char* pClientIP, short port) = 0;
 	virtual void OnRecv(SESSION_UID sessionUID, const char* pPacket, int size) = 0;
 	virtual void OnClientJoin(SESSION_UID sessionUID) = 0;
-
-	void Send(long long sessionUID, char* pPacket, int size);
+	virtual void OnClientLeave(SESSION_UID sessionUID) = 0;
 
 private:
+	void PostRecv(SESSION* pSession);
+	void PostSend(SESSION* pSession);
 	void WorkerThread();
 	void AcceptThread();
 	void SendThread();
@@ -79,15 +83,11 @@ private:
 	void AfterRecvProcess(SESSION* pSession, DWORD transferredBytes);
 	void AfterSendProcess(SESSION* pSession);
 
-	SESSION*	GetSession(SESSION_UID sessionUID);
-	SESSION_UID MakeSessionUID(int sessionIdx, int sessionId);
-	void		ReleaseSession(SESSION* pSession);
-	bool		PreventRelease(SESSION* pSession);
-	bool		UnlockPrevent(SESSION* pSession);
-
-	int GetSessionIndexPart(SESSION_UID sessionUID) { return sessionUID >> 32; }
-
-	void PrintError(int errorcode, int line);
+	SESSION* GetSession(SESSION_UID sessionUID);
+	void	 ReleaseSession(SESSION* pSession);
+	bool	 PreventRelease(SESSION* pSession);
+	bool	 PreventReleaseEx(SESSION* pSession, SESSION_UID sessionUID);
+	bool	 UnlockPrevent(SESSION* pSession);
 
 private:
 	SOCKET					 m_listenSocket;
@@ -99,8 +99,8 @@ private:
 	std::atomic<int>		 m_iAtomicSessionUID;
 	int						 m_MaxClientCnt;
 
-	SESSION*		 m_SessionArray = nullptr;
-	std::vector<int> m_vecSessionIndexArray;
+	SESSION*						   m_SessionArray = nullptr;
+	Concurrency::concurrent_queue<int> m_queueSessionIndexArray;
 
 	// MemoryPool<SESSION>* m_pSessionPool;
 	MemoryPool<MESSAGE>* m_pMessagePool;

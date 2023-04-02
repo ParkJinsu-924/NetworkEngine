@@ -1,5 +1,4 @@
 ﻿#include "NetServer.h"
-#include "GlobalValue.h"
 #include "NetUtil.h"
 
 NetServer::NetServer()
@@ -45,7 +44,7 @@ bool NetServer::Start(const char* ip, short port, int workerThreadCnt, bool tcpN
 
 	for (int sessionIndex = 0; sessionIndex < maxUserCnt; ++sessionIndex)
 	{
-		m_vecSessionIndexArray.push_back(sessionIndex);
+		m_queueSessionIndexArray.push(sessionIndex);
 	}
 
 	if (listen(m_listenSocket, SOMAXCONN) == SOCKET_ERROR)
@@ -148,26 +147,30 @@ void NetServer::PostSend(SESSION* pSession)
 	}
 }
 
-void NetServer::Send(long long sessionUID, char* pPacket, int size)
+bool NetServer::Send(long long sessionUID, char* pPacket, int size)
 {
 	if (pPacket == nullptr)
-		return;
+		return false;
 
 	SESSION* pSession = GetSession(sessionUID);
 	if (pSession == nullptr)
-		return;
+		return false;
 
-	if (pSession->isDisconnect == RELEASE_TRUE)
-		return;
+	if (!PreventReleaseEx(pSession, sessionUID))
+		return false;
 
 	MESSAGE* pMessage = m_pMessagePool->Allocate();
 	if (pMessage == nullptr)
-		return;
+		return false;
 
 	pMessage->header.length = size;
 	memcpy(pMessage->payload, pPacket, size);
 
 	pSession->sendQ.push(pMessage);
+
+	UnlockPrevent(pSession);
+
+	return true;
 }
 
 void NetServer::WorkerThread()
@@ -179,8 +182,8 @@ void NetServer::WorkerThread()
 		DWORD		transferredBytes = 0;
 
 		// available error : ERROR_OPERATION_ABORTED, ERROR_ABANDONED_WAIT_0, WAIT_TIMEOUT
-		BOOL success = GetQueuedCompletionStatus(m_hIocp, &transferredBytes, (PULONG_PTR)&pSession, &pOverlapped, INFINITE);
-		if (!success || pOverlapped == nullptr)
+		GetQueuedCompletionStatus(m_hIocp, &transferredBytes, (PULONG_PTR)&pSession, &pOverlapped, INFINITE);
+		if (pOverlapped == nullptr)
 		{
 			PostQueuedCompletionStatus(m_hIocp, NULL, NULL, NULL);
 			break;
@@ -215,10 +218,6 @@ void NetServer::SendThread()
 			SESSION* pSession = &m_SessionArray[idx];
 			if (pSession == nullptr)
 				continue;
-
-			if (pSession->isDisconnect == RELEASE_TRUE)
-			{
-			}
 
 			if (pSession->sessionSocket == 0)
 				continue;
@@ -266,7 +265,13 @@ void NetServer::AcceptThread()
 			continue;
 		}
 
-		int		 sessionIdx = m_vecSessionIndexArray.back();
+		int sessionIdx;
+		if (!m_queueSessionIndexArray.try_pop(sessionIdx))
+		{
+			closesocket(acceptSocket);
+			continue;
+		}
+
 		SESSION* pSession = &m_SessionArray[sessionIdx];
 		if (pSession == nullptr)
 		{
@@ -282,8 +287,6 @@ void NetServer::AcceptThread()
 		}
 
 		++m_iAtomicCurrentClientCnt;
-
-		m_vecSessionIndexArray.pop_back();
 
 		pSession->sessionSocket = acceptSocket;
 		pSession->sessionUID = NetUtil::MakeSessionUID(sessionIdx, ++m_iAtomicSessionUID);
@@ -330,7 +333,7 @@ void NetServer::AfterRecvProcess(SESSION* pSession, DWORD transferredBytes)
 			// release session
 		}
 
-		if ((short)(useSize - headerSize) < header.length)
+		if (static_cast<short>(useSize - headerSize) < header.length)
 			break;
 
 		// need to change
@@ -368,7 +371,7 @@ void NetServer::AfterSendProcess(SESSION* pSession)
 
 SESSION* NetServer::GetSession(SESSION_UID sessionUID)
 {
-	int sessionIdx = GetSessionIndexPart(sessionUID);
+	int sessionIdx = NetUtil::GetSessionIndexPart(sessionUID);
 	if (sessionIdx >= m_MaxClientCnt)
 		return nullptr;
 
@@ -383,8 +386,32 @@ void NetServer::ReleaseSession(SESSION* pSession)
 	if (pSession == nullptr)
 		return;
 
+	closesocket(pSession->sessionSocket);
 
+	OnClientLeave(pSession->sessionUID);
+
+	MESSAGE* pMessage = nullptr;
+	while (pSession->sendQ.try_pop(pMessage))
+	{
+		if (pMessage == nullptr)
+			continue;
+
+		m_pMessagePool->Deallocate(pMessage);
+	}
+
+	while (pSession->sendPendingQ.try_pop(pMessage))
+	{
+		if (pMessage == nullptr)
+			continue;
+
+		m_pMessagePool->Deallocate(pMessage);
+	}
+
+	int sessionIndex = NetUtil::GetSessionIndexPart(pSession->sessionUID);
 	pSession->Reset();
+
+	m_queueSessionIndexArray.push(sessionIndex);
+	--m_iAtomicCurrentClientCnt;
 }
 
 bool NetServer::PreventRelease(SESSION* pSession)
@@ -396,6 +423,21 @@ bool NetServer::PreventRelease(SESSION* pSession)
 		return false;
 
 	++pSession->ioCount;
+}
+
+bool NetServer::PreventReleaseEx(SESSION* pSession, SESSION_UID sessionUID)
+{
+	if (pSession == nullptr)
+		return false;
+
+	++pSession->ioCount;
+
+	if (pSession->isDisconnect == RELEASE_TRUE || pSession->sessionUID != sessionUID)
+	{
+		UnlockPrevent(pSession);
+		return false;
+	}
+	return true;
 }
 
 bool NetServer::UnlockPrevent(SESSION* pSession)

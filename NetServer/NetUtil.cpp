@@ -14,3 +14,8 @@ long long NetUtil::MakeSessionUID(int sessionIdx, int sessionId)
 	sessionUID += sessionId;
 	return sessionUID;
 }
+
+int NetUtil::GetSessionIndexPart(long long sessionUID)
+{
+	return sessionUID >> 32;
+}
