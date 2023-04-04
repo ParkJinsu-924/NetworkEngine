@@ -27,7 +27,7 @@ public:
 	{
 		sessionUID = 0;
 		sessionSocket = 0;
-		isDisconnect = RELEASE_FALSE;
+		isDisconnect = RELEASE_TRUE;
 		ZeroMemory(&recvOverlapped, sizeof(recvOverlapped));
 		ZeroMemory(&sendOverlapped, sizeof(sendOverlapped));
 		recvQ.Reset();
