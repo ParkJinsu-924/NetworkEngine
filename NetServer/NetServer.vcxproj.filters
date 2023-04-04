@@ -13,9 +13,15 @@
     <ClInclude Include="NetServer.h">
       <Filter>NetServer</Filter>
     </ClInclude>
+    <ClInclude Include="NetUtil.h">
+      <Filter>NetServer</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="NetServer.cpp">
+      <Filter>NetServer</Filter>
+    </ClCompile>
+    <ClCompile Include="NetUtil.cpp">
       <Filter>NetServer</Filter>
     </ClCompile>
   </ItemGroup>

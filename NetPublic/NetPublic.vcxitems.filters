@@ -10,6 +10,9 @@
     <Filter Include="RingBuffer">
       <UniqueIdentifier>{4bbecf95-60af-4722-b0fb-12c4fbd280c3}</UniqueIdentifier>
     </Filter>
+    <Filter Include="ThreadLocalMemoryPool">
+      <UniqueIdentifier>{4a84758c-431e-4823-8503-9ab2f1d961c6}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="$(MSBuildThisFileDirectory)MemoryPool.h">
@@ -20,6 +23,9 @@
     </ClInclude>
     <ClInclude Include="$(MSBuildThisFileDirectory)RingBuffer.h">
       <Filter>RingBuffer</Filter>
+    </ClInclude>
+    <ClInclude Include="$(MSBuildThisFileDirectory)ThreadLocalMemoryPool.h">
+      <Filter>ThreadLocalMemoryPool</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

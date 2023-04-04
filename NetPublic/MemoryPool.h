@@ -6,7 +6,6 @@ class MemoryPool
 {
 public:
 	MemoryPool(size_t maxCount)
-		: m_vecPool(maxCount)
 	{
 		for (size_t i = 0; i < maxCount; ++i)
 			m_vecPool.push_back(new (std::nothrow) T);
@@ -22,7 +21,7 @@ public:
 	T* Allocate()
 	{
 		std::lock_guard<std::mutex> lock(m_lock);
-		T* ptr = nullptr;
+		T*							ptr = nullptr;
 		if (m_vecPool.size() > 0)
 		{
 			ptr = m_vecPool.back();
@@ -44,5 +43,5 @@ public:
 private:
 	std::vector<T*> m_vecPool;
 	int				m_iMaxCount = 0;
-	std::mutex      m_lock;
+	std::mutex		m_lock;
 };

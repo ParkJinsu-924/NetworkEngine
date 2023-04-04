@@ -126,9 +126,11 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClInclude Include="NetServer.h" />
+    <ClInclude Include="NetUtil.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="NetServer.cpp" />
+    <ClCompile Include="NetUtil.cpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

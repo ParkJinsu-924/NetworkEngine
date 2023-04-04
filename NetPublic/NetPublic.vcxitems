@@ -17,6 +17,7 @@
     <ClInclude Include="$(MSBuildThisFileDirectory)MemoryPool.h" />
     <ClInclude Include="$(MSBuildThisFileDirectory)Protocol.h" />
     <ClInclude Include="$(MSBuildThisFileDirectory)RingBuffer.h" />
+    <ClInclude Include="$(MSBuildThisFileDirectory)ThreadLocalMemoryPool.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="$(MSBuildThisFileDirectory)GlobalValue.h" />
