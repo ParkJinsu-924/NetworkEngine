@@ -13,15 +13,9 @@
     <ClInclude Include="NetClient.h">
       <Filter>NetClient</Filter>
     </ClInclude>
-    <ClInclude Include="CC.h">
-      <Filter>NetClient</Filter>
-    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="NetClient.cpp">
-      <Filter>NetClient</Filter>
-    </ClCompile>
-    <ClCompile Include="CC.cpp">
       <Filter>NetClient</Filter>
     </ClCompile>
   </ItemGroup>

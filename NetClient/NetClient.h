@@ -10,6 +10,7 @@
 #include <concurrent_queue.h>
 
 #include "MemoryPool.h"
+#include "ThreadLocalMemoryPool.h"
 #include "RingBuffer.h"
 #include "Protocol.h"
 
@@ -53,12 +54,14 @@ public:
 class NetClient
 {
 public:
-	NetClient() = default;
+	NetClient();
 	bool Connect(const char* ip, short port, bool tcpNagleOn);
-	bool Send(char* pPacket, int size);
-	//bool Disconnect();
+	bool Send(MESSAGE* pMessage);
 
-	virtual void OnRecv(const char* pPacket, int size) = 0;
+	MESSAGE* AllocateMessage();
+	bool	 FreeMessage(MESSAGE* pMessage);
+
+	virtual void OnRecv(MESSAGE* pMessage) = 0;
 
 private:
 	void WorkerThread();
@@ -77,5 +80,6 @@ private:
 	std::vector<std::thread> m_vecWorkerThread;
 	std::thread				 m_SendThread;
 
-	MemoryPool<MESSAGE>* m_pMessagePool;
+	//MemoryPool<MESSAGE>* m_pMessagePool;
+	ThreadLocalMemoryPool<MESSAGE> m_MessagePool;
 };

@@ -65,14 +65,14 @@ public:
 	NetServer();
 
 	bool Start(const char* ip, short port, int workerThreadCnt, bool tcpNagleOn, int maxUserCnt);
-	bool Send(long long sessionUID, MESSAGE* pPacket, int size);
+	bool Send(long long sessionUID, MESSAGE* pPacket);
 
 	MESSAGE* AllocateMessage();
 	bool	 FreeMessage(MESSAGE* pMessage);
 
 protected:
 	virtual bool OnConnectionRequest(char* pClientIP, short port) = 0;
-	virtual void OnRecv(SESSION_UID sessionUID, MESSAGE* pMessage, int size) = 0;
+	virtual void OnRecv(SESSION_UID sessionUID, MESSAGE* pMessage) = 0;
 	virtual void OnClientJoin(SESSION_UID sessionUID) = 0;
 	virtual void OnClientLeave(SESSION_UID sessionUID) = 0;
 

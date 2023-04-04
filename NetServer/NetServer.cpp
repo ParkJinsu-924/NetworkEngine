@@ -143,7 +143,7 @@ void NetServer::PostSend(SESSION* pSession)
 	}
 }
 
-bool NetServer::Send(long long sessionUID, MESSAGE* pMessage, int size)
+bool NetServer::Send(long long sessionUID, MESSAGE* pMessage)
 {
 	if (pMessage == nullptr)
 		return false;
@@ -337,16 +337,14 @@ void NetServer::AfterRecvProcess(SESSION* pSession, DWORD transferredBytes)
 		if (static_cast<short>(useSize - headerSize) < header.length)
 			break;
 
-		recvQ.move_tail(headerSize);
-
 		MESSAGE* pMessage = AllocateMessage();
 		if (pMessage == nullptr)
 			return;
 
-		recvQ.peek((char*)pMessage->payload, header.length);
-		recvQ.move_tail(header.length);
+		recvQ.peek((char*)pMessage, headerSize + header.length);
+		recvQ.move_tail(headerSize + header.length);
 
-		OnRecv(pSession->sessionUID, pMessage, header.length);
+		OnRecv(pSession->sessionUID, pMessage);
 	}
 
 	PostRecv(pSession);
@@ -453,4 +451,36 @@ bool NetServer::UnlockPrevent(SESSION* pSession)
 		ReleaseSession(pSession);
 	}
 	return true;
+}
+
+
+class TestServer : public NetServer
+{
+	bool OnConnectionRequest(char* pClientIP, short port)
+	{
+		return true;
+	}
+
+	void OnClientJoin(SESSION_UID sessionUID)
+	{
+		std::cout << "Client come : " << sessionUID << std::endl;
+	}
+
+	void OnRecv(SESSION_UID sessionUID, MESSAGE* pMessage)
+	{
+		Send(sessionUID, pMessage);
+	}
+
+	void OnClientLeave(SESSION_UID sessionUID)
+	{
+
+	}
+};
+
+TestServer server;
+
+int main()
+{
+	server.Start("0.0.0.0", 27931, 5, false, 400);
+	Sleep(INFINITE);
 }

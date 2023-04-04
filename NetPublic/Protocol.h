@@ -3,7 +3,7 @@
 
 static constexpr int MAX_PAYLOAD_SIZE = 65535;
 
-template<typename T>
+template <typename T>
 class ThreadLocalMemoryPool;
 
 #pragma pack(1)
@@ -15,6 +15,7 @@ struct HEADER
 class MESSAGE
 {
 	friend class NetServer;
+	friend class NetClient;
 	friend class ThreadLocalMemoryPool<MESSAGE>;
 	friend class MemoryPool<MESSAGE>;
 
@@ -29,17 +30,12 @@ public:
 
 		std::memcpy(this->payload + header.length, payload, size);
 		header.length += size;
+		return true;
 	}
 
-	char* GetPayload()
-	{
-		return payload;	
-	}
-
-	void Reset()
-	{
-		header.length = 0;
-	}
+	char* GetPayload() { return payload; }
+	short GetPayloadSize() { return header.length; }
+	void  Reset() { header.length = 0; }
 
 private:
 	HEADER header;
