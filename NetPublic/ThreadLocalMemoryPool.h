@@ -10,11 +10,14 @@
 template <typename T>
 class ThreadLocalMemoryPool
 {
+	struct BLOCK;
+	using QUEUE_PTR = Concurrency::concurrent_queue<BLOCK*>*;
+
 private:
 	struct BLOCK
 	{
-		T									   data;
-		Concurrency::concurrent_queue<BLOCK*>* pQueue;
+		T		  data;
+		QUEUE_PTR pQueue;
 	};
 
 public:
@@ -28,6 +31,7 @@ public:
 	{
 		BLOCK* block = nullptr;
 		auto&  queue = block_queue();
+
 		while (true)
 		{
 			if (!queue.try_pop(block))
@@ -65,7 +69,7 @@ private:
 	size_t block_count_;
 	size_t block_size_;
 
-public:
+private:
 	Concurrency::concurrent_queue<BLOCK*>& block_queue()
 	{
 		static thread_local Concurrency::concurrent_queue<BLOCK*> queue;

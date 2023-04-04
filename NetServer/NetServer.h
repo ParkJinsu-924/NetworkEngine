@@ -12,6 +12,7 @@
 #include "MemoryPool.h"
 #include "RingBuffer.h"
 #include "Protocol.h"
+#include "ThreadLocalMemoryPool.h"
 
 #include "GlobalValue.h"
 
@@ -64,11 +65,14 @@ public:
 	NetServer();
 
 	bool Start(const char* ip, short port, int workerThreadCnt, bool tcpNagleOn, int maxUserCnt);
-	bool Send(long long sessionUID, char* pPacket, int size);
+	bool Send(long long sessionUID, MESSAGE* pPacket, int size);
+
+	MESSAGE* AllocateMessage();
+	bool	 FreeMessage(MESSAGE* pMessage);
 
 protected:
 	virtual bool OnConnectionRequest(char* pClientIP, short port) = 0;
-	virtual void OnRecv(SESSION_UID sessionUID, const char* pPacket, int size) = 0;
+	virtual void OnRecv(SESSION_UID sessionUID, MESSAGE* pMessage, int size) = 0;
 	virtual void OnClientJoin(SESSION_UID sessionUID) = 0;
 	virtual void OnClientLeave(SESSION_UID sessionUID) = 0;
 
@@ -102,6 +106,5 @@ private:
 	SESSION*						   m_SessionArray = nullptr;
 	Concurrency::concurrent_queue<int> m_queueSessionIndexArray;
 
-	// MemoryPool<SESSION>* m_pSessionPool;
-	MemoryPool<MESSAGE>* m_pMessagePool;
+	ThreadLocalMemoryPool<MESSAGE> m_MessagePool;
 };

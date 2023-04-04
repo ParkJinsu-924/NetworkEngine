@@ -1,9 +1,11 @@
 ﻿#include "NetServer.h"
 #include "NetUtil.h"
+#include "ThreadLocalMemoryPool.h"
 
 NetServer::NetServer()
 : m_iAtomicCurrentClientCnt(0)
 , m_iAtomicSessionUID(0)
+, m_MessagePool(3000)
 {
 }
 
@@ -35,9 +37,7 @@ bool NetServer::Start(const char* ip, short port, int workerThreadCnt, bool tcpN
 
 	// init session array
 	m_SessionArray = new (std::nothrow) SESSION[maxUserCnt];
-	// init pool
-	m_pMessagePool = new (std::nothrow) MemoryPool<MESSAGE>(TOTAL_MESSAGE_COUNT_IN_MEMORY_POOL);
-	if (m_SessionArray == nullptr || m_pMessagePool == nullptr)
+	if (m_SessionArray == nullptr)
 		return false;
 
 	m_MaxClientCnt = maxUserCnt;
@@ -53,12 +53,15 @@ bool NetServer::Start(const char* ip, short port, int workerThreadCnt, bool tcpN
 	// create thread
 	for (int i = 0; i < workerThreadCnt; ++i)
 	{
-		m_vecWorkerThread.push_back(std::thread([this]() { WorkerThread(); }));
+		m_vecWorkerThread.push_back(std::thread([this]()
+												{ WorkerThread(); }));
 	}
 
-	m_vecSendThread.push_back(std::thread([this]() { SendThread(); }));
+	m_vecSendThread.push_back(std::thread([this]()
+										  { SendThread(); }));
 
-	m_AcceptThread = std::thread([this]() { AcceptThread(); });
+	m_AcceptThread = std::thread([this]()
+								 { AcceptThread(); });
 
 	return true;
 }
@@ -70,10 +73,10 @@ void NetServer::PostRecv(SESSION* pSession)
 
 	RingBuffer& recvQ = pSession->recvQ;
 
-	int freeSize = recvQ.free_space();
-	int directEnqueueSize = recvQ.direct_enqueue_size();
+	int freeSize = (int)recvQ.free_space();
+	int directEnqueueSize = (int)recvQ.direct_enqueue_size();
 
-	int	bufCount = 1;
+	int	   bufCount = 1;
 	WSABUF recvBuf[2];
 	recvBuf[0].buf = recvQ.head_pointer();
 	recvBuf[0].len = directEnqueueSize;
@@ -89,7 +92,7 @@ void NetServer::PostRecv(SESSION* pSession)
 	PreventRelease(pSession);
 
 	DWORD flags = 0;
-	int   result = WSARecv(pSession->sessionSocket, recvBuf, bufCount, nullptr, &flags, &pSession->recvOverlapped, nullptr);
+	int	  result = WSARecv(pSession->sessionSocket, recvBuf, bufCount, nullptr, &flags, &pSession->recvOverlapped, nullptr);
 	if (result == SOCKET_ERROR && WSAGetLastError() != WSA_IO_PENDING)
 	{
 		NetUtil::PrintError(WSAGetLastError(), __LINE__);
@@ -114,12 +117,9 @@ void NetServer::PostSend(SESSION* pSession)
 	while (sendQ.try_pop(pMessage))
 	{
 		if (pMessage == nullptr)
-		{
-			// Call Release Session
-			return;
-		}
+			continue;
 
-		sendBuf[wsaBufIdx].buf = (char*)&pMessage->header;
+		sendBuf[wsaBufIdx].buf = (char*)pMessage;
 		sendBuf[wsaBufIdx].len = sizeof(pMessage->header) + pMessage->header.length;
 
 		++wsaBufIdx;
@@ -132,11 +132,10 @@ void NetServer::PostSend(SESSION* pSession)
 
 	pSession->ResetSendOverlapped();
 
-	//++pSession->ioCount;
 	PreventRelease(pSession);
 
 	DWORD flags = 0;
-	int   result = WSASend(pSession->sessionSocket, sendBuf, wsaBufIdx, nullptr, flags, &pSession->sendOverlapped, nullptr);
+	int	  result = WSASend(pSession->sessionSocket, sendBuf, wsaBufIdx, nullptr, flags, &pSession->sendOverlapped, nullptr);
 	if (result == SOCKET_ERROR && WSAGetLastError() != WSA_IO_PENDING)
 	{
 		NetUtil::PrintError(WSAGetLastError(), __LINE__);
@@ -144,9 +143,9 @@ void NetServer::PostSend(SESSION* pSession)
 	}
 }
 
-bool NetServer::Send(long long sessionUID, char* pPacket, int size)
+bool NetServer::Send(long long sessionUID, MESSAGE* pMessage, int size)
 {
-	if (pPacket == nullptr)
+	if (pMessage == nullptr)
 		return false;
 
 	SESSION* pSession = GetSession(sessionUID);
@@ -156,17 +155,30 @@ bool NetServer::Send(long long sessionUID, char* pPacket, int size)
 	if (!PreventReleaseEx(pSession, sessionUID))
 		return false;
 
-	MESSAGE* pMessage = m_pMessagePool->Allocate();
-	if (pMessage == nullptr)
-		return false;
-
-	pMessage->header.length = size;
-	memcpy(pMessage->payload, pPacket, size);
-
 	pSession->sendQ.push(pMessage);
 
 	UnlockPrevent(pSession);
 
+	return true;
+}
+
+MESSAGE* NetServer::AllocateMessage()
+{
+	MESSAGE* pMessage = m_MessagePool.Allocate();
+	if (pMessage == nullptr)
+		return nullptr;
+
+	pMessage->Reset();
+
+	return pMessage;
+}
+
+bool NetServer::FreeMessage(MESSAGE* pMessage)
+{
+	if (pMessage == nullptr)
+		return false;
+
+	m_MessagePool.Free(pMessage);
 	return true;
 }
 
@@ -317,31 +329,24 @@ void NetServer::AfterRecvProcess(SESSION* pSession, DWORD transferredBytes)
 			break;
 
 		if (recvQ.peek((char*)&header, headerSize) == false)
-		{
-			NetUtil::PrintError(WSAGetLastError(), __LINE__);
-			// release session
-		}
+			return;
 
 		if (header.length >= RINGBUFFER_SIZE - headerSize)
-		{
-			NetUtil::PrintError(WSAGetLastError(), __LINE__);
-			// release session
-		}
+			return;
 
 		if (static_cast<short>(useSize - headerSize) < header.length)
 			break;
 
-		// need to change
-		/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-		char* pBuffer = new char[header.length]; // MemoryPoolTLS::Alloc(header.length)
 		recvQ.move_tail(headerSize);
-		recvQ.peek((char*)pBuffer, header.length);
+
+		MESSAGE* pMessage = AllocateMessage();
+		if (pMessage == nullptr)
+			return;
+
+		recvQ.peek((char*)pMessage->payload, header.length);
 		recvQ.move_tail(header.length);
 
-		OnRecv(pSession->sessionUID, pBuffer, header.length);
-
-		delete[] pBuffer;
-		/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+		OnRecv(pSession->sessionUID, pMessage, header.length);
 	}
 
 	PostRecv(pSession);
@@ -360,7 +365,7 @@ void NetServer::AfterSendProcess(SESSION* pSession)
 		if (pMessage == nullptr)
 			continue;
 
-		m_pMessagePool->Deallocate(pMessage);
+		FreeMessage(pMessage);
 	}
 }
 
@@ -391,7 +396,7 @@ void NetServer::ReleaseSession(SESSION* pSession)
 		if (pMessage == nullptr)
 			continue;
 
-		m_pMessagePool->Deallocate(pMessage);
+		FreeMessage(pMessage);
 	}
 
 	while (pSession->sendPendingQ.try_pop(pMessage))
@@ -399,7 +404,7 @@ void NetServer::ReleaseSession(SESSION* pSession)
 		if (pMessage == nullptr)
 			continue;
 
-		m_pMessagePool->Deallocate(pMessage);
+		FreeMessage(pMessage);
 	}
 
 	int sessionIndex = NetUtil::GetSessionIndexPart(pSession->sessionUID);
