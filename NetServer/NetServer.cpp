@@ -418,6 +418,7 @@ bool NetServer::PreventRelease(SESSION* pSession)
 		return false;
 
 	++pSession->ioCount;
+	return true;
 }
 
 bool NetServer::PreventReleaseEx(SESSION* pSession, SESSION_UID sessionUID)
@@ -446,4 +447,5 @@ bool NetServer::UnlockPrevent(SESSION* pSession)
 	{
 		ReleaseSession(pSession);
 	}
+	return true;
 }
