@@ -1,0 +1,17 @@
+
+*.ipch
+*.config
+.vs/NetworkEngine/v15/.suo
+*.db
+*.opendb
+*.db-shm
+*.db-wal
+*.exe
+*.ilk
+*.pdb
+*.obj
+*.log
+*.tlog
+*.idb
+*.iobj
+*.ipdb
