@@ -80,6 +80,5 @@ private:
 	std::vector<std::thread> m_vecWorkerThread;
 	std::thread				 m_SendThread;
 
-	//MemoryPool<MESSAGE>* m_pMessagePool;
 	ThreadLocalMemoryPool<MESSAGE> m_MessagePool;
 };
