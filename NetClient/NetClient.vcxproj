@@ -124,11 +124,9 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClInclude Include="CC.h" />
     <ClInclude Include="NetClient.h" />
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="CC.cpp" />
     <ClCompile Include="NetClient.cpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

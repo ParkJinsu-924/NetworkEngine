@@ -66,6 +66,7 @@ public:
 
 	bool Start(const char* ip, short port, int workerThreadCnt, bool tcpNagleOn, int maxUserCnt);
 	bool Send(long long sessionUID, MESSAGE* pPacket);
+	bool Disconnect(SESSION_UID sessionUID);
 
 	MESSAGE* AllocateMessage();
 	bool	 FreeMessage(MESSAGE* pMessage);
