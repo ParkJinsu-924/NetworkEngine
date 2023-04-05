@@ -295,6 +295,7 @@ void NetServer::AcceptThread()
 		InetNtopA(AF_INET, (const void*)&addr.sin_addr.s_addr, clientIP, sizeof(clientIP));
 		if (!OnConnectionRequest(clientIP, addr.sin_port))
 		{
+			--m_iAtomicCurrentClientCnt;
 			closesocket(acceptSocket);
 			continue;
 		}

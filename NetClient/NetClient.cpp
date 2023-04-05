@@ -180,7 +180,10 @@ void NetClient::PostSend()
 	while (m_Session.sendQ.try_pop(pMessage))
 	{
 		if (pMessage == nullptr)
-			continue;
+		{
+			// Call Release Session
+			return;
+		}
 
 		sendBuf[wsaBufIdx].buf = (char*)pMessage;
 		sendBuf[wsaBufIdx].len = sizeof(pMessage->header) + pMessage->header.length;
@@ -227,7 +230,7 @@ void NetClient::AfterRecvProcess(DWORD transferredBytes)
 		if (header.length >= RINGBUFFER_SIZE - headerSize)
 		{
 			PRINT_ERROR();
-			return;
+			break;
 		}
 
 		if ((short)(useSize - headerSize) < header.length)
