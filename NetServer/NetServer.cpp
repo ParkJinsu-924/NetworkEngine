@@ -53,12 +53,15 @@ bool NetServer::Start(const char* ip, short port, int workerThreadCnt, bool tcpN
 	// create thread
 	for (int i = 0; i < workerThreadCnt; ++i)
 	{
-		m_vecWorkerThread.push_back(std::thread([this]() { WorkerThread(); }));
+		m_vecWorkerThread.push_back(std::thread([this]()
+												{ WorkerThread(); }));
 	}
 
-	m_vecSendThread.push_back(std::thread([this]() { SendThread(); }));
+	m_vecSendThread.push_back(std::thread([this]()
+										  { SendThread(); }));
 
-	m_AcceptThread = std::thread([this]() { AcceptThread(); });
+	m_AcceptThread = std::thread([this]()
+								 { AcceptThread(); });
 
 	return true;
 }
@@ -73,7 +76,7 @@ void NetServer::PostRecv(SESSION* pSession)
 	int freeSize = (int)recvQ.free_space();
 	int directEnqueueSize = (int)recvQ.direct_enqueue_size();
 
-	int	bufCount = 1;
+	int	   bufCount = 1;
 	WSABUF recvBuf[2];
 	recvBuf[0].buf = recvQ.head_pointer();
 	recvBuf[0].len = directEnqueueSize;
@@ -89,7 +92,7 @@ void NetServer::PostRecv(SESSION* pSession)
 	PreventRelease(pSession);
 
 	DWORD flags = 0;
-	int   result = WSARecv(pSession->sessionSocket, recvBuf, bufCount, nullptr, &flags, &pSession->recvOverlapped, nullptr);
+	int	  result = WSARecv(pSession->sessionSocket, recvBuf, bufCount, nullptr, &flags, &pSession->recvOverlapped, nullptr);
 	if (result == SOCKET_ERROR && WSAGetLastError() != WSA_IO_PENDING)
 	{
 		NetUtil::PrintError(WSAGetLastError(), __LINE__);
@@ -132,7 +135,7 @@ void NetServer::PostSend(SESSION* pSession)
 	PreventRelease(pSession);
 
 	DWORD flags = 0;
-	int   result = WSASend(pSession->sessionSocket, sendBuf, wsaBufIdx, nullptr, flags, &pSession->sendOverlapped, nullptr);
+	int	  result = WSASend(pSession->sessionSocket, sendBuf, wsaBufIdx, nullptr, flags, &pSession->sendOverlapped, nullptr);
 	if (result == SOCKET_ERROR && WSAGetLastError() != WSA_IO_PENDING)
 	{
 		NetUtil::PrintError(WSAGetLastError(), __LINE__);
@@ -152,16 +155,15 @@ bool NetServer::Send(long long sessionUID, MESSAGE* pMessage)
 		return false;
 	}
 
-	//IOCount를 올려주는 이유는, push를 하는 도중, Release를 해버릴 경우, 그냥 push가 되는 상황이 발생하기 때문이다. 그렇기 때문에 그냥 해제를 막아버리는 것이 좋다.
-	if (!PreventReleaseEx(pSession, sessionUID))
+	std::lock_guard<std::mutex> lock(pSession->lock);
+
+	if (pSession->sessionUID != sessionUID || pSession->IsReleased())
 	{
 		FreeMessage(pMessage);
 		return false;
 	}
 
 	pSession->sendQ.push(pMessage);
-
-	UnlockPrevent(pSession);
 
 	return true;
 }
@@ -172,18 +174,15 @@ bool NetServer::Disconnect(SESSION_UID sessionUID)
 	if (pSession == nullptr)
 		return false;
 
-	if (pSession->isDisconnect == RELEASE_TRUE)
+	std::lock_guard<std::mutex> lock(pSession->lock);
+
+	if (pSession->IsReleased())
 		return false;
 
-	if (!PreventReleaseEx(pSession, sessionUID))
+	if (pSession->sessionUID != sessionUID)
 		return false;
 
-	if (pSession->isDisconnect == RELEASE_FALSE)
-	{
-		CancelIoEx((HANDLE)pSession->sessionSocket, NULL);
-	}
-
-	UnlockPrevent(pSession);
+	shutdown(pSession->sessionSocket, SD_BOTH);
 
 	return true;
 }
@@ -325,7 +324,7 @@ void NetServer::AcceptThread()
 
 		pSession->sessionSocket = acceptSocket;
 		pSession->sessionUID = NetUtil::MakeSessionUID(sessionIdx, ++m_iAtomicSessionUID);
-		InterlockedExchange(&pSession->isDisconnect, RELEASE_FALSE); //바꾸는 순간 보내기 가능
+		pSession->SetReleaseState(false);
 
 		PreventRelease(pSession);
 
@@ -410,6 +409,13 @@ void NetServer::ReleaseSession(SESSION* pSession)
 	if (pSession == nullptr)
 		return;
 
+	std::lock_guard<std::mutex> lock(pSession->lock);
+
+	if (pSession->IsReleased())
+		return;
+
+	pSession->SetReleaseState(true);
+
 	closesocket(pSession->sessionSocket);
 
 	OnClientLeave(pSession->sessionUID);
@@ -432,9 +438,11 @@ void NetServer::ReleaseSession(SESSION* pSession)
 	}
 
 	int sessionIndex = NetUtil::GetSessionIndexPart(pSession->sessionUID);
+
 	pSession->Reset();
 
 	m_queueSessionIndexArray.push(sessionIndex);
+
 	--m_iAtomicCurrentClientCnt;
 }
 
@@ -443,26 +451,10 @@ bool NetServer::PreventRelease(SESSION* pSession)
 	if (pSession == nullptr)
 		return false;
 
-	if (pSession->isDisconnect == RELEASE_TRUE)
+	if (pSession->IsReleased())
 		return false;
 
 	++pSession->ioCount;
-	return true;
-}
-
-bool NetServer::PreventReleaseEx(SESSION* pSession, SESSION_UID sessionUID)
-{
-	if (pSession == nullptr)
-		return false;
-
-	++pSession->ioCount;
-
-	if (pSession->isDisconnect == RELEASE_TRUE || pSession->sessionUID != sessionUID)
-	{
-		UnlockPrevent(pSession);
-		return false;
-	}
-
 	return true;
 }
 
@@ -471,9 +463,10 @@ bool NetServer::UnlockPrevent(SESSION* pSession)
 	if (pSession == nullptr)
 		return false;
 
-	// 기존에 0, 즉 Release상태가 아니였을 경우에만 ReleaseSession을 호출
-	// 두 번째 인터락 조건은 다른 곳에서 WSARecv나 WSASend가 호출되었을 때, 중복 Release방지용
-	if (--pSession->ioCount == 0 && InterlockedCompareExchange(&pSession->isDisconnect, RELEASE_TRUE, RELEASE_FALSE) == RELEASE_FALSE)
+	if (pSession->IsReleased())
+		return false;
+
+	if (--pSession->ioCount == 0)
 	{
 		ReleaseSession(pSession);
 	}
@@ -499,7 +492,6 @@ class TestServer : public NetServer
 
 	void OnClientLeave(SESSION_UID sessionUID)
 	{
-
 	}
 };
 

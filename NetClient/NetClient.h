@@ -25,9 +25,11 @@ public:
 	void Reset()
 	{
 		sessionSocket = 0;
+		releaseFlag = false;
 		ZeroMemory(&recvOverlapped, sizeof(recvOverlapped));
 		ZeroMemory(&sendOverlapped, sizeof(sendOverlapped));
 		recvQ.Reset();
+		ioCount = 0;
 	}
 
 public:
@@ -41,12 +43,17 @@ public:
 		ZeroMemory(&sendOverlapped, sizeof(sendOverlapped));
 	}
 
+	bool IsReleased() { return releaseFlag; }
+	void SetReleaseState(bool release) { releaseFlag = release; }
+
 public:
 	SOCKET									sessionSocket;
-	bool									disconnectFlag;
+	bool									releaseFlag;
 	OVERLAPPED								recvOverlapped;
 	OVERLAPPED								sendOverlapped;
 	RingBuffer								recvQ;
+	std::atomic<int>						ioCount;
+	std::mutex								lock;
 	Concurrency::concurrent_queue<MESSAGE*> sendQ;
 	Concurrency::concurrent_queue<MESSAGE*> sendPendingQ;
 };
@@ -62,6 +69,7 @@ public:
 	bool	 FreeMessage(MESSAGE* pMessage);
 
 	virtual void OnRecv(MESSAGE* pMessage) = 0;
+	virtual void OnDisconnect() = 0;
 
 private:
 	void WorkerThread();
@@ -71,15 +79,20 @@ private:
 	void AfterRecvProcess(DWORD transferredBytes);
 	void AfterSendProcess();
 
+	void ReleaseSession();
+	bool PreventRelease();
+	bool UnlockPrevent();
+
+	SESSION& GetSession() { return m_Session; }
+
 	void PrintError(int errorcode, int line);
 
 private:
 	SESSION m_Session;
-	HANDLE  m_hIocp;
+	HANDLE	m_hIocp;
 
 	std::vector<std::thread> m_vecWorkerThread;
 	std::thread				 m_SendThread;
 
-	//MemoryPool<MESSAGE>* m_pMessagePool;
 	ThreadLocalMemoryPool<MESSAGE> m_MessagePool;
 };

@@ -21,26 +21,37 @@ bool NetClient::Connect(const char* ip, short port, bool tcpNagleOn)
 	if (clientSocket == INVALID_SOCKET)
 		return false;
 
-	m_Session.sessionSocket = clientSocket;
+	GetSession().sessionSocket = clientSocket;
+
+	bool isSocketSetSuccess = true;
 
 	BOOL flag = true;
 	if (setsockopt(clientSocket, SOL_SOCKET, SO_KEEPALIVE, (char*)&flag, sizeof(flag)) == SOCKET_ERROR)
-		return false;
+		isSocketSetSuccess = false;
 
 	DWORD optval = true;
 	if (setsockopt(clientSocket, IPPROTO_TCP, TCP_NODELAY, (char*)&optval, sizeof(optval)) == SOCKET_ERROR)
-		return false;
+		isSocketSetSuccess = false;
 
 	linger lingerOpt;
 	lingerOpt.l_onoff = 1;
 	lingerOpt.l_linger = 0;
 	if (setsockopt(clientSocket, SOL_SOCKET, SO_LINGER, (char*)&lingerOpt, sizeof(lingerOpt)) == SOCKET_ERROR)
+		isSocketSetSuccess = false;
+
+	if (isSocketSetSuccess == false)
+	{
+		closesocket(clientSocket);
 		return false;
+	}
 
 	constexpr int WORKER_THREAD_CNT = 4;
 	m_hIocp = CreateIoCompletionPort(INVALID_HANDLE_VALUE, NULL, NULL, WORKER_THREAD_CNT);
 	if (m_hIocp == NULL)
+	{
+		closesocket(clientSocket);
 		return false;
+	}
 
 	// create thread
 	for (int i = 0; i < WORKER_THREAD_CNT; ++i)
@@ -57,10 +68,16 @@ bool NetClient::Connect(const char* ip, short port, bool tcpNagleOn)
 	InetPtonA(AF_INET, ip, &addr.sin_addr);
 	addr.sin_port = htons(port);
 	if (connect(clientSocket, (SOCKADDR*)&addr, sizeof(addr)) == SOCKET_ERROR)
+	{
+		closesocket(clientSocket);
 		return false;
+	}
 
 	if (CreateIoCompletionPort((HANDLE)clientSocket, m_hIocp, NULL, NULL) == NULL)
+	{
+		closesocket(clientSocket);
 		return false;
+	}
 
 	PostRecv();
 
@@ -72,7 +89,14 @@ bool NetClient::Send(MESSAGE* pMessage)
 	if (pMessage == nullptr)
 		return false;
 
-	m_Session.sendQ.push(pMessage);
+	std::lock_guard<std::mutex> lock(GetSession().lock);
+	if (GetSession().IsReleased())
+	{
+		FreeMessage(pMessage);
+		return false;
+	}
+
+	GetSession().sendQ.push(pMessage);
 	return true;
 }
 
@@ -118,11 +142,11 @@ void NetClient::WorkerThread()
 			break;
 		}
 
-		if (&m_Session.recvOverlapped == pOverlapped)
+		if (&GetSession().recvOverlapped == pOverlapped)
 		{
 			AfterRecvProcess(transferredBytes);
 		}
-		else if (&m_Session.sendOverlapped == pOverlapped)
+		else if (&GetSession().sendOverlapped == pOverlapped)
 		{
 			AfterSendProcess();
 		}
@@ -141,7 +165,7 @@ void NetClient::SendThread()
 
 void NetClient::PostRecv()
 {
-	RingBuffer& recvQ = m_Session.recvQ;
+	RingBuffer& recvQ = GetSession().recvQ;
 
 	int freeSize = (int)recvQ.free_space();
 	int directEnqueueSize = (int)recvQ.direct_enqueue_size();
@@ -157,27 +181,29 @@ void NetClient::PostRecv()
 		++bufCount;
 	}
 
-	m_Session.ResetRecvOverlapped();
+	GetSession().ResetRecvOverlapped();
+	PreventRelease();
 
 	DWORD flags = 0;
-	int	  result = WSARecv(m_Session.sessionSocket, recvBuf, bufCount, nullptr, &flags, &m_Session.recvOverlapped, nullptr);
+	int	  result = WSARecv(GetSession().sessionSocket, recvBuf, bufCount, nullptr, &flags, &GetSession().recvOverlapped, nullptr);
 	if (result == SOCKET_ERROR && WSAGetLastError() != WSA_IO_PENDING)
 	{
-		// need to release sesion
+		PRINT_ERROR();
+		UnlockPrevent();
 	}
 }
 
 void NetClient::PostSend()
 {
 	// when sendPendingQ is not empty, send Process is not over
-	if (!m_Session.sendPendingQ.empty() || m_Session.sendQ.empty())
+	if (!GetSession().sendPendingQ.empty() || GetSession().sendQ.empty())
 		return;
 
 	WSABUF sendBuf[MAX_WSABUF_SIZE];
 
 	int		 wsaBufIdx = 0;
 	MESSAGE* pMessage = nullptr;
-	while (m_Session.sendQ.try_pop(pMessage))
+	while (GetSession().sendQ.try_pop(pMessage))
 	{
 		if (pMessage == nullptr)
 		{
@@ -190,26 +216,27 @@ void NetClient::PostSend()
 
 		++wsaBufIdx;
 
-		m_Session.sendPendingQ.push(pMessage);
+		GetSession().sendPendingQ.push(pMessage);
 
 		if (wsaBufIdx >= MAX_WSABUF_SIZE)
 			break;
 	}
 
-	m_Session.ResetSendOverlapped();
+	GetSession().ResetSendOverlapped();
+	PreventRelease();
 
 	DWORD flags = 0;
-	int	  result = WSASend(m_Session.sessionSocket, sendBuf, wsaBufIdx, nullptr, flags, &m_Session.sendOverlapped, nullptr);
+	int	  result = WSASend(GetSession().sessionSocket, sendBuf, wsaBufIdx, nullptr, flags, &GetSession().sendOverlapped, nullptr);
 	if (result == SOCKET_ERROR && WSAGetLastError() != WSA_IO_PENDING)
 	{
 		PRINT_ERROR();
-		// release session
+		UnlockPrevent();
 	}
 }
 
 void NetClient::AfterRecvProcess(DWORD transferredBytes)
 {
-	RingBuffer& recvQ = m_Session.recvQ;
+	RingBuffer& recvQ = GetSession().recvQ;
 	recvQ.move_head(transferredBytes);
 
 	while (true)
@@ -252,13 +279,68 @@ void NetClient::AfterRecvProcess(DWORD transferredBytes)
 void NetClient::AfterSendProcess()
 {
 	MESSAGE* pMessage = nullptr;
-	while (m_Session.sendPendingQ.try_pop(pMessage))
+	while (GetSession().sendPendingQ.try_pop(pMessage))
 	{
 		if (pMessage == nullptr)
 			continue;
 
 		FreeMessage(pMessage);
 	}
+}
+
+void NetClient::ReleaseSession()
+{
+	std::lock_guard<std::mutex> lock(GetSession().lock);
+
+	if (GetSession().IsReleased())
+		return;
+
+	GetSession().SetReleaseState(true);
+
+	closesocket(GetSession().sessionSocket);
+
+	MESSAGE* pMessage = nullptr;
+	while (GetSession().sendQ.try_pop(pMessage))
+	{
+		if (pMessage == nullptr)
+			continue;
+
+		FreeMessage(pMessage);
+	}
+
+	while (GetSession().sendPendingQ.try_pop(pMessage))
+	{
+		if (pMessage == nullptr)
+			continue;
+
+		FreeMessage(pMessage);
+	}
+
+	GetSession().Reset();
+
+	OnDisconnect();
+}
+
+bool NetClient::PreventRelease()
+{
+	if (GetSession().IsReleased())
+		return false;
+
+	++GetSession().ioCount;
+	
+	return true;
+}
+
+bool NetClient::UnlockPrevent()
+{
+	if (GetSession().IsReleased())
+		return true;
+
+	if (--GetSession().ioCount == 0)
+	{
+		ReleaseSession();
+	}
+	return true;
 }
 
 void NetClient::PrintError(int errorcode, int line)
@@ -272,6 +354,10 @@ class TestClient : public NetClient
 	{
 		std::cout << pMessage->GetPayload() << std::endl;
 		FreeMessage(pMessage);
+	}
+
+	void OnDisconnect()
+	{
 	}
 };
 

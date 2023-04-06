@@ -26,12 +26,14 @@ public:
 
 	void Reset()
 	{
-		sessionUID = 0;
 		sessionSocket = 0;
-		isDisconnect = RELEASE_TRUE;
+		sessionUID = 0;
+		releaseFlag = false;
+		sessionIndex = 0;
 		ZeroMemory(&recvOverlapped, sizeof(recvOverlapped));
 		ZeroMemory(&sendOverlapped, sizeof(sendOverlapped));
 		recvQ.Reset();
+		ioCount = 0;
 	}
 
 	void ResetRecvOverlapped()
@@ -44,14 +46,21 @@ public:
 		ZeroMemory(&sendOverlapped, sizeof(sendOverlapped));
 	}
 
+	void Lock() { lock.lock(); }
+	void Unlock() { lock.unlock(); }
+
+	void SetReleaseState(bool release) { releaseFlag = release; }
+	bool IsReleased() { return releaseFlag; }
+
 	SOCKET									sessionSocket;
 	long long								sessionUID;
-	long									isDisconnect;
+	bool									releaseFlag;
 	int										sessionIndex;
 	OVERLAPPED								recvOverlapped;
 	OVERLAPPED								sendOverlapped;
 	RingBuffer								recvQ;
 	std::atomic<int>						ioCount;
+	std::mutex								lock;
 	Concurrency::concurrent_queue<MESSAGE*> sendQ;
 	Concurrency::concurrent_queue<MESSAGE*> sendPendingQ;
 };
@@ -91,7 +100,6 @@ private:
 	SESSION* GetSession(SESSION_UID sessionUID);
 	void	 ReleaseSession(SESSION* pSession);
 	bool	 PreventRelease(SESSION* pSession);
-	bool	 PreventReleaseEx(SESSION* pSession, SESSION_UID sessionUID);
 	bool	 UnlockPrevent(SESSION* pSession);
 
 private:
