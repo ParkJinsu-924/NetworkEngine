@@ -113,9 +113,6 @@ void NetServer::PostSend(SESSION* pSession)
 	MESSAGE* pMessage = nullptr;
 	while (sendQ.try_pop(pMessage))
 	{
-		if (pMessage == nullptr)
-			continue;
-
 		sendBuf[wsaBufIdx].buf = (char*)pMessage;
 		sendBuf[wsaBufIdx].len = sizeof(pMessage->header) + pMessage->header.length;
 
@@ -387,16 +384,9 @@ void NetServer::AfterSendProcess(SESSION* pSession)
 	if (pSession == nullptr)
 		return;
 
-	auto& sessionSendPeningMessageQ = pSession->sendPendingQ;
-
 	MESSAGE* pMessage = nullptr;
-	while (sessionSendPeningMessageQ.try_pop(pMessage))
-	{
-		if (pMessage == nullptr)
-			continue;
-
+	while (pSession->sendPendingQ.try_pop(pMessage))
 		FreeMessage(pMessage);
-	}
 }
 
 SESSION* NetServer::GetSession(SESSION_UID sessionUID)
