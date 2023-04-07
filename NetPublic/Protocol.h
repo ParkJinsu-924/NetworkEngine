@@ -17,7 +17,6 @@ class MESSAGE
 	friend class NetServer;
 	friend class NetClient;
 	friend class ThreadLocalMemoryPool<MESSAGE>;
-	friend class MemoryPool<MESSAGE>;
 
 private:
 	MESSAGE() = default;

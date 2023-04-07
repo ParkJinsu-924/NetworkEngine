@@ -25,7 +25,7 @@ public:
 	void Reset()
 	{
 		sessionSocket = 0;
-		releaseFlag = false;
+		releaseFlag = true;
 		ZeroMemory(&recvOverlapped, sizeof(recvOverlapped));
 		ZeroMemory(&sendOverlapped, sizeof(sendOverlapped));
 		recvQ.Reset();
@@ -64,6 +64,7 @@ public:
 	NetClient();
 	bool Connect(const char* ip, short port, bool tcpNagleOn);
 	bool Send(MESSAGE* pMessage);
+	bool Disconnect();
 
 	MESSAGE* AllocateMessage();
 	bool	 FreeMessage(MESSAGE* pMessage);
@@ -89,7 +90,7 @@ private:
 
 private:
 	SESSION m_Session;
-	HANDLE	m_hIocp;
+	HANDLE  m_hIocp;
 
 	std::vector<std::thread> m_vecWorkerThread;
 	std::thread				 m_SendThread;

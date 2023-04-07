@@ -21,6 +21,7 @@ bool NetClient::Connect(const char* ip, short port, bool tcpNagleOn)
 	if (clientSocket == INVALID_SOCKET)
 		return false;
 
+	GetSession().Reset();
 	GetSession().sessionSocket = clientSocket;
 
 	bool isSocketSetSuccess = true;
@@ -56,11 +57,9 @@ bool NetClient::Connect(const char* ip, short port, bool tcpNagleOn)
 	// create thread
 	for (int i = 0; i < WORKER_THREAD_CNT; ++i)
 	{
-		m_vecWorkerThread.push_back(std::thread([this]()
-												{ WorkerThread(); }));
+		m_vecWorkerThread.push_back(std::thread([this]() { WorkerThread(); }));
 	}
-	m_SendThread = std::thread([this]()
-							   { SendThread(); });
+	m_SendThread = std::thread([this]() { SendThread(); });
 
 	// connect
 	SOCKADDR_IN addr;
@@ -78,6 +77,8 @@ bool NetClient::Connect(const char* ip, short port, bool tcpNagleOn)
 		closesocket(clientSocket);
 		return false;
 	}
+
+	GetSession().SetReleaseState(false);
 
 	PostRecv();
 
@@ -97,6 +98,18 @@ bool NetClient::Send(MESSAGE* pMessage)
 	}
 
 	GetSession().sendQ.push(pMessage);
+	return true;
+}
+
+bool NetClient::Disconnect()
+{
+	std::lock_guard<std::mutex> lock(GetSession().lock);
+
+	if (GetSession().IsReleased())
+		return false;
+
+	shutdown(GetSession().sessionSocket, SD_BOTH);
+
 	return true;
 }
 
@@ -138,8 +151,8 @@ void NetClient::WorkerThread()
 		// error_operation_aborted for CancelIo
 		if (transferredBytes == 0 || pOverlapped->Internal == ERROR_OPERATION_ABORTED)
 		{
-			// release
-			break;
+			UnlockPrevent();
+			continue;
 		}
 
 		if (&GetSession().recvOverlapped == pOverlapped)
@@ -150,6 +163,8 @@ void NetClient::WorkerThread()
 		{
 			AfterSendProcess();
 		}
+
+		UnlockPrevent();
 	}
 }
 
@@ -170,7 +185,7 @@ void NetClient::PostRecv()
 	int freeSize = (int)recvQ.free_space();
 	int directEnqueueSize = (int)recvQ.direct_enqueue_size();
 
-	int	   bufCount = 1;
+	int	bufCount = 1;
 	WSABUF recvBuf[2];
 	recvBuf[0].buf = recvQ.head_pointer();
 	recvBuf[0].len = directEnqueueSize;
@@ -185,7 +200,7 @@ void NetClient::PostRecv()
 	PreventRelease();
 
 	DWORD flags = 0;
-	int	  result = WSARecv(GetSession().sessionSocket, recvBuf, bufCount, nullptr, &flags, &GetSession().recvOverlapped, nullptr);
+	int   result = WSARecv(GetSession().sessionSocket, recvBuf, bufCount, nullptr, &flags, &GetSession().recvOverlapped, nullptr);
 	if (result == SOCKET_ERROR && WSAGetLastError() != WSA_IO_PENDING)
 	{
 		PRINT_ERROR();
@@ -226,7 +241,7 @@ void NetClient::PostSend()
 	PreventRelease();
 
 	DWORD flags = 0;
-	int	  result = WSASend(GetSession().sessionSocket, sendBuf, wsaBufIdx, nullptr, flags, &GetSession().sendOverlapped, nullptr);
+	int   result = WSASend(GetSession().sessionSocket, sendBuf, wsaBufIdx, nullptr, flags, &GetSession().sendOverlapped, nullptr);
 	if (result == SOCKET_ERROR && WSAGetLastError() != WSA_IO_PENDING)
 	{
 		PRINT_ERROR();
@@ -316,8 +331,6 @@ void NetClient::ReleaseSession()
 		FreeMessage(pMessage);
 	}
 
-	GetSession().Reset();
-
 	OnDisconnect();
 }
 
@@ -327,7 +340,7 @@ bool NetClient::PreventRelease()
 		return false;
 
 	++GetSession().ioCount;
-	
+
 	return true;
 }
 
@@ -358,6 +371,7 @@ class TestClient : public NetClient
 
 	void OnDisconnect()
 	{
+		std::cout << "Disconnected!!!!!!!!!!!" << std::endl;
 	}
 };
 
@@ -372,27 +386,43 @@ void SendingThread()
 		pMessage->put(payload, rand() % 37);
 		pMessage->put("\0", 1);
 
-		nl.Send(pMessage);
-		Sleep(10);
+		if (!nl.Send(pMessage))
+		{
+			std::cout << "Can't Send !" << std::endl;
+		}
+		Sleep(800);
+	}
+}
+
+std::chrono::steady_clock::time_point startTime;
+
+void DisconnectThread()
+{
+	while (true)
+	{
+		auto currentTime = std::chrono::high_resolution_clock::now();
+		auto elapsedTime = std::chrono::duration_cast<std::chrono::seconds>(currentTime - startTime).count();
+		
+		if (elapsedTime >= 10)
+		{
+			nl.Disconnect();
+			break;
+		}
 	}
 }
 
 int main()
 {
+	startTime = std::chrono::high_resolution_clock::now();
 	bool f = nl.Connect("127.0.0.1", 27931, false);
 	if (f == false)
 	{
 		std::cout << "sdfsdf" << std::endl;
 	}
 
-	std::thread th1([]()
-					{ SendingThread(); });
-	std::thread th2([]()
-					{ SendingThread(); });
-	std::thread th3([]()
-					{ SendingThread(); });
-	std::thread th4([]()
-					{ SendingThread(); });
+	std::thread th1([]() { SendingThread(); });
+
+	//std::thread th5([]() { DisconnectThread(); });
 
 	Sleep(INFINITE);
 }

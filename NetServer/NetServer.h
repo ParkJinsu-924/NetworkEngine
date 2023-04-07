@@ -9,7 +9,6 @@
 #include <concurrent_unordered_map.h>
 #include <concurrent_queue.h>
 
-#include "MemoryPool.h"
 #include "RingBuffer.h"
 #include "Protocol.h"
 #include "ThreadLocalMemoryPool.h"
@@ -28,7 +27,7 @@ public:
 	{
 		sessionSocket = 0;
 		sessionUID = 0;
-		releaseFlag = false;
+		releaseFlag = true;
 		sessionIndex = 0;
 		ZeroMemory(&recvOverlapped, sizeof(recvOverlapped));
 		ZeroMemory(&sendOverlapped, sizeof(sendOverlapped));

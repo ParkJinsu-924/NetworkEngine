@@ -53,15 +53,12 @@ bool NetServer::Start(const char* ip, short port, int workerThreadCnt, bool tcpN
 	// create thread
 	for (int i = 0; i < workerThreadCnt; ++i)
 	{
-		m_vecWorkerThread.push_back(std::thread([this]()
-												{ WorkerThread(); }));
+		m_vecWorkerThread.push_back(std::thread([this]() { WorkerThread(); }));
 	}
 
-	m_vecSendThread.push_back(std::thread([this]()
-										  { SendThread(); }));
+	m_vecSendThread.push_back(std::thread([this]() { SendThread(); }));
 
-	m_AcceptThread = std::thread([this]()
-								 { AcceptThread(); });
+	m_AcceptThread = std::thread([this]() { AcceptThread(); });
 
 	return true;
 }
@@ -76,7 +73,7 @@ void NetServer::PostRecv(SESSION* pSession)
 	int freeSize = (int)recvQ.free_space();
 	int directEnqueueSize = (int)recvQ.direct_enqueue_size();
 
-	int	   bufCount = 1;
+	int	bufCount = 1;
 	WSABUF recvBuf[2];
 	recvBuf[0].buf = recvQ.head_pointer();
 	recvBuf[0].len = directEnqueueSize;
@@ -92,7 +89,7 @@ void NetServer::PostRecv(SESSION* pSession)
 	PreventRelease(pSession);
 
 	DWORD flags = 0;
-	int	  result = WSARecv(pSession->sessionSocket, recvBuf, bufCount, nullptr, &flags, &pSession->recvOverlapped, nullptr);
+	int   result = WSARecv(pSession->sessionSocket, recvBuf, bufCount, nullptr, &flags, &pSession->recvOverlapped, nullptr);
 	if (result == SOCKET_ERROR && WSAGetLastError() != WSA_IO_PENDING)
 	{
 		NetUtil::PrintError(WSAGetLastError(), __LINE__);
@@ -135,7 +132,7 @@ void NetServer::PostSend(SESSION* pSession)
 	PreventRelease(pSession);
 
 	DWORD flags = 0;
-	int	  result = WSASend(pSession->sessionSocket, sendBuf, wsaBufIdx, nullptr, flags, &pSession->sendOverlapped, nullptr);
+	int   result = WSASend(pSession->sessionSocket, sendBuf, wsaBufIdx, nullptr, flags, &pSession->sendOverlapped, nullptr);
 	if (result == SOCKET_ERROR && WSAGetLastError() != WSA_IO_PENDING)
 	{
 		NetUtil::PrintError(WSAGetLastError(), __LINE__);
@@ -322,6 +319,8 @@ void NetServer::AcceptThread()
 
 		++m_iAtomicCurrentClientCnt;
 
+		pSession->Reset();
+
 		pSession->sessionSocket = acceptSocket;
 		pSession->sessionUID = NetUtil::MakeSessionUID(sessionIdx, ++m_iAtomicSessionUID);
 		pSession->SetReleaseState(false);
@@ -473,6 +472,8 @@ bool NetServer::UnlockPrevent(SESSION* pSession)
 	return true;
 }
 
+int a = 0;
+
 class TestServer : public NetServer
 {
 	bool OnConnectionRequest(char* pClientIP, short port)
@@ -487,11 +488,21 @@ class TestServer : public NetServer
 
 	void OnRecv(SESSION_UID sessionUID, MESSAGE* pMessage)
 	{
-		Send(sessionUID, pMessage);
+		if (++a == 5)
+		{
+			std::cout << "Call Disconnect !" << std::endl;
+			Disconnect(sessionUID);
+		}
+
+		if (!Send(sessionUID, pMessage))
+		{
+			std::cout << "Send Fail!" << std::endl;
+		}
 	}
 
 	void OnClientLeave(SESSION_UID sessionUID)
 	{
+		std::cout << "Client Leave : " << sessionUID << std::endl;
 	}
 };
 
