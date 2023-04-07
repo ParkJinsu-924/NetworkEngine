@@ -5,16 +5,17 @@
 
 NetClient::NetClient()
 : m_MessagePool(3000)
+, m_hIocp(INVALID_HANDLE_VALUE)
+, m_AlreadyInitialized(false)
 {
 }
 
 bool NetClient::Connect(const char* ip, short port, bool tcpNagleOn)
 {
-	if (ip == nullptr)
+	if (!Initialize())
 		return false;
 
-	WSADATA wsa;
-	if (WSAStartup(MAKEWORD(2, 2), &wsa) != 0)
+	if (ip == nullptr)
 		return false;
 
 	const SOCKET clientSocket = socket(AF_INET, SOCK_STREAM, 0);
@@ -46,21 +47,6 @@ bool NetClient::Connect(const char* ip, short port, bool tcpNagleOn)
 		return false;
 	}
 
-	constexpr int WORKER_THREAD_CNT = 4;
-	m_hIocp = CreateIoCompletionPort(INVALID_HANDLE_VALUE, NULL, NULL, WORKER_THREAD_CNT);
-	if (m_hIocp == NULL)
-	{
-		closesocket(clientSocket);
-		return false;
-	}
-
-	// create thread
-	for (int i = 0; i < WORKER_THREAD_CNT; ++i)
-	{
-		m_vecWorkerThread.push_back(std::thread([this]() { WorkerThread(); }));
-	}
-	m_SendThread = std::thread([this]() { SendThread(); });
-
 	// connect
 	SOCKADDR_IN addr;
 	addr.sin_family = AF_INET;
@@ -79,6 +65,8 @@ bool NetClient::Connect(const char* ip, short port, bool tcpNagleOn)
 	}
 
 	GetSession().SetReleaseState(false);
+
+	OnConnect();
 
 	PostRecv();
 
@@ -356,6 +344,31 @@ bool NetClient::UnlockPrevent()
 	return true;
 }
 
+bool NetClient::Initialize()
+{
+	if (m_AlreadyInitialized == true)
+		return true;
+
+	WSADATA wsa;
+	if (WSAStartup(MAKEWORD(2, 2), &wsa) != 0)
+		return false;
+
+	constexpr int WORKER_THREAD_CNT = 4;
+	m_hIocp = CreateIoCompletionPort(INVALID_HANDLE_VALUE, NULL, NULL, WORKER_THREAD_CNT);
+	if (m_hIocp == NULL)
+		return false;
+
+	// create thread
+	for (int i = 0; i < WORKER_THREAD_CNT; ++i)
+		m_vecWorkerThread.push_back(std::thread([this]() { WorkerThread(); }));
+
+	m_SendThread = std::thread([this]() { SendThread(); });
+
+	m_AlreadyInitialized = true;
+
+	return true;
+}
+
 void NetClient::PrintError(int errorcode, int line)
 {
 	std::cout << "ERROR : Need to release : ErrorCode : " << errorcode << " : LINE : " << line << std::endl;
@@ -363,6 +376,11 @@ void NetClient::PrintError(int errorcode, int line)
 
 class TestClient : public NetClient
 {
+	void OnConnect()
+	{
+		std::cout << "Connect Success~~~" << std::endl;
+	}
+
 	void OnRecv(MESSAGE* pMessage)
 	{
 		std::cout << pMessage->GetPayload() << std::endl;
@@ -402,11 +420,16 @@ void DisconnectThread()
 	{
 		auto currentTime = std::chrono::high_resolution_clock::now();
 		auto elapsedTime = std::chrono::duration_cast<std::chrono::seconds>(currentTime - startTime).count();
-		
-		if (elapsedTime >= 10)
+
+		if (elapsedTime >= 7)
 		{
 			nl.Disconnect();
-			break;
+			Sleep(4000);
+			if (!nl.Connect("127.0.0.1", 27931, false))
+			{
+				std::cout << "Connect Failed ! " << std::endl;
+			}
+			startTime = currentTime;
 		}
 	}
 }
@@ -417,10 +440,11 @@ int main()
 	bool f = nl.Connect("127.0.0.1", 27931, false);
 	if (f == false)
 	{
-		std::cout << "sdfsdf" << std::endl;
+		std::cout << "Connect Fail~" << std::endl;
 	}
 
 	std::thread th1([]() { SendingThread(); });
+	std::thread th2([]() { DisconnectThread(); });
 
 	//std::thread th5([]() { DisconnectThread(); });
 

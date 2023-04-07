@@ -69,6 +69,7 @@ public:
 	MESSAGE* AllocateMessage();
 	bool	 FreeMessage(MESSAGE* pMessage);
 
+	virtual void OnConnect() = 0;
 	virtual void OnRecv(MESSAGE* pMessage) = 0;
 	virtual void OnDisconnect() = 0;
 
@@ -86,11 +87,14 @@ private:
 
 	SESSION& GetSession() { return m_Session; }
 
+	bool Initialize();
+
 	void PrintError(int errorcode, int line);
 
 private:
 	SESSION m_Session;
 	HANDLE  m_hIocp;
+	bool	m_AlreadyInitialized;
 
 	std::vector<std::thread> m_vecWorkerThread;
 	std::thread				 m_SendThread;

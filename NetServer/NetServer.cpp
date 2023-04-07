@@ -3,8 +3,8 @@
 #include "ThreadLocalMemoryPool.h"
 
 NetServer::NetServer()
-: m_iAtomicCurrentClientCnt(0)
-, m_iAtomicSessionUID(0)
+: m_AtomicCurrentClientCount(0)
+, m_AtomicSessionUID(0)
 , m_MessagePool(3000)
 {
 }
@@ -140,7 +140,7 @@ void NetServer::PostSend(SESSION* pSession)
 	}
 }
 
-bool NetServer::Send(long long sessionUID, MESSAGE* pMessage)
+bool NetServer::Send(SESSION_UID sessionUID, MESSAGE* pMessage)
 {
 	if (pMessage == nullptr)
 		return false;
@@ -281,7 +281,7 @@ void NetServer::AcceptThread()
 			}
 		}
 
-		if (m_iAtomicCurrentClientCnt >= m_MaxClientCnt)
+		if (m_AtomicCurrentClientCount >= m_MaxClientCnt)
 		{
 			closesocket(acceptSocket);
 			continue;
@@ -291,7 +291,7 @@ void NetServer::AcceptThread()
 		InetNtopA(AF_INET, (const void*)&addr.sin_addr.s_addr, clientIP, sizeof(clientIP));
 		if (!OnConnectionRequest(clientIP, addr.sin_port))
 		{
-			--m_iAtomicCurrentClientCnt;
+			--m_AtomicCurrentClientCount;
 			closesocket(acceptSocket);
 			continue;
 		}
@@ -317,12 +317,20 @@ void NetServer::AcceptThread()
 			continue;
 		}
 
-		++m_iAtomicCurrentClientCnt;
+		++m_AtomicCurrentClientCount;
 
 		pSession->Reset();
 
+		//혹시 해제되지 못했던 메시지를 반환시켜준다.
+		MESSAGE* pMessage = nullptr;
+		while (pSession->sendQ.try_pop(pMessage))
+			FreeMessage(pMessage);
+
+		while (pSession->sendPendingQ.try_pop(pMessage))
+			FreeMessage(pMessage);
+
 		pSession->sessionSocket = acceptSocket;
-		pSession->sessionUID = NetUtil::MakeSessionUID(sessionIdx, ++m_iAtomicSessionUID);
+		pSession->sessionUID = NetUtil::MakeSessionUID(sessionIdx, ++m_AtomicSessionUID);
 		pSession->SetReleaseState(false);
 
 		PreventRelease(pSession);
@@ -421,20 +429,10 @@ void NetServer::ReleaseSession(SESSION* pSession)
 
 	MESSAGE* pMessage = nullptr;
 	while (pSession->sendQ.try_pop(pMessage))
-	{
-		if (pMessage == nullptr)
-			continue;
-
 		FreeMessage(pMessage);
-	}
 
 	while (pSession->sendPendingQ.try_pop(pMessage))
-	{
-		if (pMessage == nullptr)
-			continue;
-
 		FreeMessage(pMessage);
-	}
 
 	int sessionIndex = NetUtil::GetSessionIndexPart(pSession->sessionUID);
 
@@ -442,7 +440,7 @@ void NetServer::ReleaseSession(SESSION* pSession)
 
 	m_queueSessionIndexArray.push(sessionIndex);
 
-	--m_iAtomicCurrentClientCnt;
+	--m_AtomicCurrentClientCount;
 }
 
 bool NetServer::PreventRelease(SESSION* pSession)
@@ -472,8 +470,6 @@ bool NetServer::UnlockPrevent(SESSION* pSession)
 	return true;
 }
 
-int a = 0;
-
 class TestServer : public NetServer
 {
 	bool OnConnectionRequest(char* pClientIP, short port)
@@ -488,12 +484,6 @@ class TestServer : public NetServer
 
 	void OnRecv(SESSION_UID sessionUID, MESSAGE* pMessage)
 	{
-		if (++a == 5)
-		{
-			std::cout << "Call Disconnect !" << std::endl;
-			Disconnect(sessionUID);
-		}
-
 		if (!Send(sessionUID, pMessage))
 		{
 			std::cout << "Send Fail!" << std::endl;

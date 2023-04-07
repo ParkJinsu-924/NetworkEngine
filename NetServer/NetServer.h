@@ -15,6 +15,8 @@
 
 #include "GlobalValue.h"
 
+using SESSION_UID = long long;
+
 class SESSION
 {
 public:
@@ -52,7 +54,7 @@ public:
 	bool IsReleased() { return releaseFlag; }
 
 	SOCKET									sessionSocket;
-	long long								sessionUID;
+	SESSION_UID								sessionUID;
 	bool									releaseFlag;
 	int										sessionIndex;
 	OVERLAPPED								recvOverlapped;
@@ -67,15 +69,13 @@ public:
 class NetServer
 {
 public:
-	using SESSION_UID = long long;
-
-public:
 	NetServer();
 
 	bool Start(const char* ip, short port, int workerThreadCnt, bool tcpNagleOn, int maxUserCnt);
-	bool Send(long long sessionUID, MESSAGE* pPacket);
+	bool Send(SESSION_UID sessionUID, MESSAGE* pPacket);
 	bool Disconnect(SESSION_UID sessionUID);
 
+	//Message
 	MESSAGE* AllocateMessage();
 	bool	 FreeMessage(MESSAGE* pMessage);
 
@@ -107,8 +107,8 @@ private:
 	std::vector<std::thread> m_vecWorkerThread;
 	std::vector<std::thread> m_vecSendThread;
 	std::thread				 m_AcceptThread;
-	std::atomic<int>		 m_iAtomicCurrentClientCnt;
-	std::atomic<int>		 m_iAtomicSessionUID;
+	std::atomic<int>		 m_AtomicCurrentClientCount;
+	std::atomic<int>		 m_AtomicSessionUID;
 	int						 m_MaxClientCnt;
 
 	SESSION*						   m_SessionArray = nullptr;
