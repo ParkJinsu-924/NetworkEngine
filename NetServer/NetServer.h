@@ -86,8 +86,6 @@ protected:
 	virtual void OnClientLeave(SESSION_UID sessionUID) = 0;
 
 private:
-	void PostRecv(SESSION* pSession);
-	void PostSend(SESSION* pSession);
 	void WorkerThread();
 	void AcceptThread();
 	void SendThread();
@@ -95,6 +93,8 @@ private:
 private:
 	void AfterRecvProcess(SESSION* pSession, DWORD transferredBytes);
 	void AfterSendProcess(SESSION* pSession);
+	void PostRecv(SESSION* pSession);
+	void PostSend(SESSION* pSession);
 
 	SESSION* GetSession(SESSION_UID sessionUID);
 	void	 ReleaseSession(SESSION* pSession);
@@ -111,8 +111,8 @@ private:
 	std::atomic<int>		 m_AtomicSessionUID;
 	int						 m_MaxClientCnt;
 
-	SESSION*						   m_SessionArray = nullptr;
-	Concurrency::concurrent_queue<int> m_queueSessionIndexArray;
+	SESSION* m_SessionArray = nullptr;
 
-	ThreadLocalMemoryPool<MESSAGE> m_MessagePool;
+	Concurrency::concurrent_queue<int> m_queueSessionIndexArray;
+	ThreadLocalMemoryPool<MESSAGE>	 m_MessagePool;
 };
