@@ -6,10 +6,17 @@ static constexpr int MAX_PAYLOAD_SIZE = 65535;
 template <typename T>
 class ThreadLocalMemoryPool;
 
+enum class PACKET_TYPE : short
+{
+	SYSTEM,
+	USER
+};
+
 #pragma pack(1)
 struct HEADER
 {
-	short length;
+	PACKET_TYPE type;
+	short		length;
 };
 
 class MESSAGE

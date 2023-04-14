@@ -13,6 +13,9 @@
     <Filter Include="ThreadLocalMemoryPool">
       <UniqueIdentifier>{4a84758c-431e-4823-8503-9ab2f1d961c6}</UniqueIdentifier>
     </Filter>
+    <Filter Include="SystemPacketProcessor">
+      <UniqueIdentifier>{9fdf4183-96d3-404e-a2e8-63cd95adfae0}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="$(MSBuildThisFileDirectory)MemoryPool.h">
@@ -27,11 +30,13 @@
     <ClInclude Include="$(MSBuildThisFileDirectory)ThreadLocalMemoryPool.h">
       <Filter>ThreadLocalMemoryPool</Filter>
     </ClInclude>
+    <ClInclude Include="$(MSBuildThisFileDirectory)SystemPacketProcessor.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="$(MSBuildThisFileDirectory)RingBuffer.cpp">
       <Filter>RingBuffer</Filter>
     </ClCompile>
     <ClCompile Include="$(MSBuildThisFileDirectory)GlobalValue.h" />
+    <ClCompile Include="$(MSBuildThisFileDirectory)SystemPacketProcessor.cpp" />
   </ItemGroup>
 </Project>
