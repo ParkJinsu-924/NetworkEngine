@@ -32,8 +32,6 @@ bool RingBuffer::put(const char* pData, size_t size)
 	m_head = (m_head + size) % m_size;
 	m_used += size;
 
-	//m_cond.notify_all();
-
 	return true;
 }
 
