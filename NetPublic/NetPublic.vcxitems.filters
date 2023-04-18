@@ -16,6 +16,9 @@
     <Filter Include="SystemPacketProcessor">
       <UniqueIdentifier>{9fdf4183-96d3-404e-a2e8-63cd95adfae0}</UniqueIdentifier>
     </Filter>
+    <Filter Include="SystemPacket">
+      <UniqueIdentifier>{cfc50296-14b7-41e8-9bd2-48723d999709}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="$(MSBuildThisFileDirectory)MemoryPool.h">
@@ -30,13 +33,32 @@
     <ClInclude Include="$(MSBuildThisFileDirectory)ThreadLocalMemoryPool.h">
       <Filter>ThreadLocalMemoryPool</Filter>
     </ClInclude>
-    <ClInclude Include="$(MSBuildThisFileDirectory)SystemPacketProcessor.h" />
+    <ClInclude Include="$(MSBuildThisFileDirectory)SystemPacketHeader.h">
+      <Filter>SystemPacket</Filter>
+    </ClInclude>
+    <ClInclude Include="$(MSBuildThisFileDirectory)SystemPacketProcessor.h">
+      <Filter>SystemPacketProcessor</Filter>
+    </ClInclude>
+    <ClInclude Include="$(MSBuildThisFileDirectory)SystemPacket.h">
+      <Filter>SystemPacket</Filter>
+    </ClInclude>
+    <ClInclude Include="$(MSBuildThisFileDirectory)SystemPacketType.h">
+      <Filter>SystemPacket</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="$(MSBuildThisFileDirectory)RingBuffer.cpp">
       <Filter>RingBuffer</Filter>
     </ClCompile>
     <ClCompile Include="$(MSBuildThisFileDirectory)GlobalValue.h" />
-    <ClCompile Include="$(MSBuildThisFileDirectory)SystemPacketProcessor.cpp" />
+    <ClCompile Include="$(MSBuildThisFileDirectory)SystemPacketHeader.cpp">
+      <Filter>SystemPacket</Filter>
+    </ClCompile>
+    <ClCompile Include="$(MSBuildThisFileDirectory)SystemPacketProcessor.cpp">
+      <Filter>SystemPacketProcessor</Filter>
+    </ClCompile>
+    <ClCompile Include="$(MSBuildThisFileDirectory)SystemPacket.cpp">
+      <Filter>SystemPacket</Filter>
+    </ClCompile>
   </ItemGroup>
 </Project>

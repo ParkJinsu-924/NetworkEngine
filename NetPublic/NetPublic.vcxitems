@@ -17,12 +17,17 @@
     <ClInclude Include="$(MSBuildThisFileDirectory)MemoryPool.h" />
     <ClInclude Include="$(MSBuildThisFileDirectory)Protocol.h" />
     <ClInclude Include="$(MSBuildThisFileDirectory)RingBuffer.h" />
+    <ClInclude Include="$(MSBuildThisFileDirectory)SystemPacket.h" />
+    <ClInclude Include="$(MSBuildThisFileDirectory)SystemPacketHeader.h" />
     <ClInclude Include="$(MSBuildThisFileDirectory)SystemPacketProcessor.h" />
+    <ClInclude Include="$(MSBuildThisFileDirectory)SystemPacketType.h" />
     <ClInclude Include="$(MSBuildThisFileDirectory)ThreadLocalMemoryPool.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="$(MSBuildThisFileDirectory)GlobalValue.h" />
     <ClCompile Include="$(MSBuildThisFileDirectory)RingBuffer.cpp" />
+    <ClCompile Include="$(MSBuildThisFileDirectory)SystemPacket.cpp" />
+    <ClCompile Include="$(MSBuildThisFileDirectory)SystemPacketHeader.cpp" />
     <ClCompile Include="$(MSBuildThisFileDirectory)SystemPacketProcessor.cpp" />
   </ItemGroup>
 </Project>
