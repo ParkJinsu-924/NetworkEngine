@@ -43,10 +43,6 @@ public:
 		return true;
 	}
 
-	bool InitializeSystemPacket();
-
-	void Process_TestPacket(SESSION* pSession, SystemPacketHeader* pSystemPacket);
-
 private:
 	std::unordered_map<int, std::function<void(SESSION*, SystemPacketHeader*)>> m_mapProcessors;
 };
